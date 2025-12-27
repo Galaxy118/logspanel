@@ -1,76 +1,99 @@
 #!/bin/bash
-# =============================================================================
-# Script de Correction - Problème Système de Fichiers en Lecture Seule
-# =============================================================================
 
-set -e  # Arrêt en cas d'erreur
+# Script de correction du problème "Read-only file system"
+# Ce script résout le problème de ProtectSystem=strict dans systemd
 
+set -e
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🔧 Correction du problème de système de fichiers en lecture seule..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Couleurs
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# 1. Corriger immédiatement le système de fichiers
-echo -e "${YELLOW}📁 Étape 1/4 - Remontage du système de fichiers en lecture-écriture${NC}"
-if mount | grep "on / type" | grep -q "ro,"; then
-    echo "⚠️  Système en lecture seule détecté, correction..."
-    sudo mount -o remount,rw /
-    echo -e "${GREEN}✅ Système remonté en lecture-écriture${NC}"
+# Étape 1 : Remonter le système en RW
+echo "📁 Étape 1/4 - Remontage du système de fichiers en lecture-écriture"
+if mount | grep " / " | grep -q "(ro"; then
+    echo "⚠️  Système en lecture seule, remontage..."
+    mount -o remount,rw /
+    echo "✅ Système remonté en lecture-écriture"
 else
-    echo -e "${GREEN}✅ Système déjà en lecture-écriture${NC}"
+    echo "✅ Système déjà en lecture-écriture"
 fi
 echo ""
 
-# 2. Installer le service keepfs-rw
-echo -e "${YELLOW}📋 Étape 2/4 - Installation du service de surveillance keepfs-rw${NC}"
-sudo cp keepfs-rw.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable keepfs-rw
-sudo systemctl restart keepfs-rw
-echo -e "${GREEN}✅ Service keepfs-rw installé et démarré${NC}"
-echo ""
+# Étape 2 : Installer le service de surveillance keepfs-rw
+echo "📋 Étape 2/4 - Installation du service de surveillance keepfs-rw"
+if [ -f "/etc/systemd/system/keepfs-rw.service" ]; then
+    echo "ℹ️  Service déjà installé, mise à jour..."
+fi
 
-# 3. Mettre à jour le service logspanel
-echo -e "${YELLOW}🔄 Étape 3/4 - Mise à jour du service logspanel${NC}"
-sudo cp logspanel.service /etc/systemd/system/
-sudo systemctl daemon-reload
-echo -e "${GREEN}✅ Service logspanel mis à jour${NC}"
-echo ""
+cat > /etc/systemd/system/keepfs-rw.service << 'EOF'
+[Unit]
+Description=Keep Filesystem Read-Write
+After=multi-user.target
+Documentation=https://github.com/votre-repo/panellogs
 
-# 4. Vérifier les permissions
-echo -e "${YELLOW}🔐 Étape 4/4 - Vérification des permissions${NC}"
-PANEL_DIR="/var/www/logspanel"
-if [ -d "$PANEL_DIR" ]; then
-    sudo chown -R www-data:www-data "$PANEL_DIR"
-    sudo chmod 775 "$PANEL_DIR"
-    sudo chmod 664 "$PANEL_DIR/servers_config.json" 2>/dev/null || echo "⚠️  servers_config.json n'existe pas encore"
-    echo -e "${GREEN}✅ Permissions corrigées${NC}"
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'while true; do if mount | grep " / " | grep -q "(ro"; then mount -o remount,rw / && logger "KeepFS-RW: Remounted / as RW"; fi; sleep 5; done'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable keepfs-rw
+systemctl restart keepfs-rw
+
+if systemctl is-active --quiet keepfs-rw; then
+    echo "✅ Service keepfs-rw installé et démarré"
 else
-    echo -e "${RED}❌ Répertoire $PANEL_DIR introuvable${NC}"
+    echo "⚠️  Attention : Le service keepfs-rw n'a pas démarré correctement"
 fi
 echo ""
 
-# 5. Redémarrer les services
-echo -e "${YELLOW}🔄 Redémarrage des services...${NC}"
-sudo systemctl restart logspanel
-echo -e "${GREEN}✅ Services redémarrés${NC}"
+# Étape 3 : Mettre à jour logspanel.service
+echo "⚙️  Étape 3/4 - Mise à jour du service logspanel"
+if [ -f "/var/www/logspanel/deploy/logspanel.service" ]; then
+    cp /var/www/logspanel/deploy/logspanel.service /etc/systemd/system/
+    systemctl daemon-reload
+    echo "✅ Service logspanel.service mis à jour"
+else
+    echo "⚠️  Fichier deploy/logspanel.service non trouvé, skip..."
+fi
 echo ""
 
-# 6. Vérifier l'état
-echo -e "${YELLOW}📊 État des services :${NC}"
-echo ""
-sudo systemctl status keepfs-rw --no-pager -l | head -n 10
-echo ""
-sudo systemctl status logspanel --no-pager -l | head -n 10
+# Étape 4 : Vérifier les permissions et redémarrer
+echo "🔐 Étape 4/4 - Permissions et redémarrage"
+chown -R www-data:www-data /var/www/logspanel
+chmod 664 /var/www/logspanel/servers_config.json
+chmod 600 /var/www/logspanel/.env
+echo "✅ Permissions corrigées"
+
+systemctl restart logspanel
+sleep 2
+
+if systemctl is-active --quiet logspanel; then
+    echo "✅ Panel redémarré avec succès"
+else
+    echo "❌ Erreur : Le panel n'a pas démarré correctement"
+    echo "Vérifiez les logs : journalctl -u logspanel -n 50"
+    exit 1
+fi
 echo ""
 
-echo -e "${GREEN}🎉 Correction terminée !${NC}"
+# Résumé
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ Correction terminée avec succès !"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "📝 Pour surveiller les logs :"
-echo "   sudo journalctl -u logspanel -u keepfs-rw -f --no-pager"
+echo "📊 Statut des services :"
+systemctl status keepfs-rw logspanel --no-pager | grep -E "Active:|Main PID:"
 echo ""
-echo "🧪 Testez maintenant la modification d'un serveur dans l'interface web"
+echo "🔍 Pour surveiller les logs :"
+echo "   sudo journalctl -u logspanel -u keepfs-rw -f"
+echo ""
+echo "🧪 Testez maintenant la création/modification d'un serveur via l'interface web"
+echo ""
