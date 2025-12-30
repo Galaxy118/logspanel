@@ -1869,11 +1869,13 @@ def account():
     is_client = perms.get('is_client', False)
     owned_servers = perms.get('owned_servers', [])
     
-    # Pour les clients, récupérer les infos de leur serveur s'ils en ont un
+    # Pour les propriétaires de serveurs, récupérer les infos de leur serveur
     client_server = None
-    if is_client and owned_servers and len(owned_servers) > 0:
+    is_owner = owned_servers and len(owned_servers) > 0 and owned_servers != 'all'
+    
+    if is_owner:
         server_id = owned_servers[0]
-        debug_log("🏪 Client avec serveur détecté", server_id=server_id)
+        debug_log("🏪 Propriétaire avec serveur détecté", server_id=server_id, is_client=is_client)
         client_server = {
             'id': server_id,
             'config': server_config.get_server(server_id),
@@ -1891,6 +1893,7 @@ def account():
         admin_servers=admin_servers,
         is_super_admin=is_super_admin,
         is_client=is_client,
+        is_owner=is_owner,
         owned_servers=owned_servers,
         client_server=client_server
     )

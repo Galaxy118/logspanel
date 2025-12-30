@@ -28,6 +28,8 @@
                         <span class="badge-role"><i class="fas fa-crown"></i> Super administrateur</span>
                     {% elif is_client %}
                         <span class="badge-role" style="background: linear-gradient(135deg, #2ecc71, #27ae60);"><i class="fas fa-store"></i> Client</span>
+                    {% elif is_owner %}
+                        <span class="badge-role" style="background: linear-gradient(135deg, #3498db, #2980b9);"><i class="fas fa-server"></i> Propriétaire</span>
                     {% endif %}
                     {% if admin_servers == 'all' or (admin_servers and admin_servers|length) %}
                         <span class="badge-role"><i class="fas fa-shield-halved"></i> Accès admin</span>
@@ -42,10 +44,10 @@
             </div>
         </div>
 
-        {# Section Client - Gestion de leur serveur unique #}
-        {% if is_client %}
+        {# Section Client/Propriétaire - Gestion de leur serveur #}
+        {% if is_client or is_owner %}
         <div class="section animate__animated animate__fadeIn" style="animation-delay: 0.1s;">
-            <h2><i class="fas fa-store"></i> Espace Client</h2>
+            <h2><i class="fas fa-store"></i> {% if is_owner %}Mon Serveur{% else %}Espace Client{% endif %}</h2>
             
             {% if client_server %}
                 {# Le client a déjà un serveur #}
@@ -92,8 +94,8 @@
                         </a>
                     </div>
                 </div>
-            {% else %}
-                {# Le client n'a pas encore de serveur - Formulaire de création #}
+            {% elif is_client and not client_server %}
+                {# Le client n'a pas encore de serveur - Formulaire de création (uniquement pour is_client) #}
                 <div class="client-create-card" style="background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(41, 128, 185, 0.05)); border: 1px solid rgba(52, 152, 219, 0.3); border-radius: 15px; padding: 25px;">
                     <div class="text-center mb-4">
                         <i class="fas fa-plus-circle fa-3x mb-3" style="color: #3498db;"></i>
