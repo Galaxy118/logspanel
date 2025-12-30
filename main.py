@@ -2543,10 +2543,20 @@ def create_server():
             }
         }
         
-        # Si c'est un client (pas super admin), ajouter le owner_id pour lier le serveur
+        # Gestion du propriétaire du serveur
+        # - Si c'est un client : forcer son propre ID comme propriétaire
+        # - Si c'est un super admin : utiliser l'ID du formulaire (optionnel)
         if is_client and not is_super_admin:
-            debug_log("🏪 Attribution du serveur au client", owner_id=user_id)
+            debug_log("🏪 Attribution du serveur au client (propriétaire automatique)", owner_id=user_id)
             config_data['owner_id'] = str(user_id)
+        elif is_super_admin:
+            # Le super admin peut spécifier un propriétaire via le formulaire
+            owner_id_form = request.form.get('owner_id', '').strip()
+            if owner_id_form:
+                debug_log("👑 Propriétaire défini par admin", owner_id=owner_id_form)
+                config_data['owner_id'] = owner_id_form
+            else:
+                debug_log("👑 Serveur créé sans propriétaire (admin uniquement)")
         
         # Créer le serveur
         debug_log("💾 Création du serveur en cours...", server_id=server_id)

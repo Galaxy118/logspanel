@@ -202,6 +202,15 @@
                                 <input type="text" class="form-control" id="database_uri" name="database_uri"
                                        placeholder="mysql://user:password@host:port/database">
                             </div>
+                            <div class="mb-3">
+                                <label for="owner_id" class="form-label">
+                                    <i class="fas fa-user-tag me-1"></i>
+                                    ID Discord du propriétaire
+                                </label>
+                                <input type="text" class="form-control" id="owner_id" name="owner_id"
+                                       placeholder="123456789012345678">
+                                <div class="form-text">L'ID Discord de l'utilisateur qui sera propriétaire de ce serveur (optionnel)</div>
+                            </div>
                         </div>
                         
                         <!-- Section Discord -->
@@ -219,23 +228,14 @@
                                        placeholder="ID du serveur Discord">
                                 <div class="form-text">ID du serveur Discord où le bot sera utilisé</div>
                             </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="discord_role_staff" class="form-label">
-                                        <i class="fas fa-user-tie me-1"></i>
-                                        Rôle Staff
-                                    </label>
-                                    <input type="text" class="form-control" id="discord_role_staff" name="discord_role_staff"
-                                           placeholder="ID ou nom du rôle staff">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="discord_role_admin" class="form-label">
-                                        <i class="fas fa-crown me-1"></i>
-                                        Rôle Admin
-                                    </label>
-                                    <input type="text" class="form-control" id="discord_role_admin" name="discord_role_admin"
-                                           placeholder="ID ou nom du rôle admin">
-                                </div>
+                            <div class="mb-3">
+                                <label for="discord_role_staff" class="form-label">
+                                    <i class="fas fa-user-tie me-1"></i>
+                                    Rôle Staff (accès aux logs)
+                                </label>
+                                <input type="text" class="form-control" id="discord_role_staff" name="discord_role_staff"
+                                       placeholder="ID du rôle staff">
+                                <div class="form-text">Les membres avec ce rôle pourront consulter les logs</div>
                             </div>
                             <div class="mb-3">
                                 <label for="discord_channel_id" class="form-label">
