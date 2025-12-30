@@ -1862,16 +1862,35 @@ def account():
         debug_log("✨ Accès à tous les serveurs (super admin)")
     else:
         accessible_servers = [sid for sid in perms.get('accessible_servers', []) if sid in servers_status]
-        debug_log("📋 Serveurs accessibles filtrés", count=len(accessible_servers))
+        debug_log("📋 Serveurs accessibles filtrés (JWT)", count=len(accessible_servers))
 
     admin_servers = perms.get('admin_servers', [])
     is_super_admin = perms.get('is_super_admin', False)
     is_client = perms.get('is_client', False)
-    owned_servers = perms.get('owned_servers', [])
+    
+    # IMPORTANT: Recalculer owned_servers dynamiquement (pas depuis le JWT)
+    # Car le serveur peut avoir été créé APRÈS la connexion
+    owned_servers = []
+    if not is_super_admin:  # Super admin a accès à tout, pas besoin de calculer
+        for sid in server_config.get_server_list():
+            srv_conf = server_config.get_server(sid)
+            if srv_conf:
+                srv_owner_id = str(srv_conf.get('owner_id', '') or '')
+                if srv_owner_id and srv_owner_id == str(user_id):
+                    owned_servers.append(sid)
+                    debug_log("🏠 Serveur propriétaire trouvé", server_id=sid, owner_id=srv_owner_id)
+    
+    debug_log("📋 Owned servers recalculés", owned_count=len(owned_servers), user_id=user_id)
+    
+    # Ajouter les serveurs possédés aux serveurs accessibles (s'ils n'y sont pas déjà)
+    for sid in owned_servers:
+        if sid not in accessible_servers:
+            accessible_servers.append(sid)
+            debug_log("➕ Serveur propriétaire ajouté aux accessibles", server_id=sid)
     
     # Pour les propriétaires de serveurs, récupérer les infos de leur serveur
     client_server = None
-    is_owner = owned_servers and len(owned_servers) > 0 and owned_servers != 'all'
+    is_owner = len(owned_servers) > 0
     
     if is_owner:
         server_id = owned_servers[0]
