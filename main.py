@@ -1,6 +1,6 @@
 from flask import Flask, redirect, request, url_for, render_template, jsonify, abort, make_response, Response, session, g
 try:
-    from flask_compress import Compress
+    from flask_compress import Compress  # pyright: ignore[reportMissingImports]
     COMPRESS_AVAILABLE = True
 except ImportError:
     COMPRESS_AVAILABLE = False
@@ -8,7 +8,7 @@ except ImportError:
 
 # Protection CSRF
 try:
-    from flask_wtf.csrf import CSRFProtect, generate_csrf
+    from flask_wtf.csrf import CSRFProtect, generate_csrf  # pyright: ignore[reportMissingImports]
     CSRF_AVAILABLE = True
 except ImportError:
     CSRF_AVAILABLE = False
@@ -18,8 +18,8 @@ except ImportError:
 
 # Rate limiting pour protection contre les attaques
 try:
-    from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
+    from flask_limiter import Limiter  # pyright: ignore[reportMissingImports]
+    from flask_limiter.util import get_remote_address  # pyright: ignore[reportMissingImports]
     LIMITER_AVAILABLE = True
 except ImportError:
     LIMITER_AVAILABLE = False
@@ -220,6 +220,32 @@ def get_all_servers_status(use_cache=True):
                 }
     
     return status_data
+
+def invalidate_all_server_caches(server_id=None):
+    """
+    Invalide tous les caches liés aux serveurs.
+    Si server_id est fourni, invalide uniquement ce serveur.
+    Sinon, invalide TOUS les caches.
+    """
+    if server_id:
+        # Invalider les caches pour un serveur spécifique
+        status_cache.invalidate(server_id)
+        server_config_cache.invalidate(server_id)
+        log_types_cache.invalidate(server_id)
+        log_stats_cache.invalidate(server_id)
+        log_counts_cache.invalidate(server_id)
+        admin_role_cache.invalidate(server_id)
+        debug_log(f"🗑️ Caches invalidés pour serveur {server_id}")
+    else:
+        # Invalider TOUS les caches (après création/suppression)
+        status_cache.invalidate()
+        server_config_cache.invalidate()
+        log_types_cache.invalidate()
+        log_stats_cache.invalidate()
+        log_counts_cache.invalidate()
+        admin_role_cache.invalidate()
+        discord_role_cache.invalidate()
+        debug_log("🗑️ Tous les caches ont été invalidés")
 
 # Load environment variables with a safe encoding fallback
 try:
@@ -2427,6 +2453,9 @@ def edit_server(server_id):
             # Mettre à jour la configuration
             server_config.update_server_config(server_id, config_data)
             
+            # Invalider les caches pour ce serveur
+            invalidate_all_server_caches(server_id)
+            
             # Synchroniser les règles firewall automatiquement (si database_uri a changé)
             if old_config and old_config.get('database_uri') != config_data.get('database_uri'):
                 sync_firewall_rules()
@@ -2605,6 +2634,9 @@ def create_server():
         server_config.create_server(server_id, config_data)
         debug_log("✅ Serveur créé avec succès", server_id=server_id, level="INFO")
         
+        # Invalider TOUS les caches pour que le nouveau serveur apparaisse partout
+        invalidate_all_server_caches()
+        
         # Synchroniser les règles firewall automatiquement
         sync_firewall_rules()
         
@@ -2690,11 +2722,8 @@ def delete_server(server_id):
         except Exception as e:
             print(f"[ERROR] Erreur lors de l'envoi du log de suppression: {e}")
         
-        # Invalider les caches liés à ce serveur
-        status_cache.invalidate(server_id)
-        server_config_cache.invalidate(server_id)
-        log_types_cache.invalidate(server_id)
-        log_stats_cache.invalidate(server_id)
+        # Invalider TOUS les caches (la liste des serveurs a changé)
+        invalidate_all_server_caches()
         
         return jsonify({'success': True, 'message': f'Serveur {server_id} supprimé avec succès'})
         
