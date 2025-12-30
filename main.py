@@ -2147,9 +2147,20 @@ def dashboard(server=None):
     
     # Vérifier l'accès au serveur spécifique
     user_permissions = request.user_data['permissions']
+    user_id = request.user_data.get('user_id')
+    
     if not user_permissions.get('is_super_admin', False):
         accessible_servers = user_permissions.get('accessible_servers', [])
-        if accessible_servers != 'all' and server not in accessible_servers:
+        
+        # Vérifier aussi si l'utilisateur est propriétaire du serveur
+        srv_conf = server_config.get_server(server)
+        is_owner = False
+        if srv_conf:
+            owner_id = str(srv_conf.get('owner_id', '') or '')
+            is_owner = owner_id and owner_id == str(user_id)
+        
+        # Autoriser si accessible OU propriétaire
+        if accessible_servers != 'all' and server not in accessible_servers and not is_owner:
             abort(403)
     
     # Vérifier le statut de la base de données du serveur
@@ -2381,7 +2392,16 @@ def edit_server(server_id):
     # Vérifier les permissions admin pour ce serveur
     if not user_permissions.get('is_super_admin', False):
         admin_servers = user_permissions.get('admin_servers', [])
-        if admin_servers != 'all' and server_id not in admin_servers:
+        
+        # Vérifier aussi si l'utilisateur est propriétaire du serveur
+        srv_conf = server_config.get_server(server_id)
+        is_owner = False
+        if srv_conf:
+            owner_id = str(srv_conf.get('owner_id', '') or '')
+            is_owner = owner_id and owner_id == str(user_id)
+        
+        # Autoriser si admin OU propriétaire
+        if admin_servers != 'all' and server_id not in admin_servers and not is_owner:
             abort(403)
     
     if request.method == 'POST':
