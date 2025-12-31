@@ -334,7 +334,7 @@ app.config['SECRET_KEY'] = _flask_secret
 # SÉCURITÉ: Configuration du cookie de session
 app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS requis avec Cloudflare Tunnels
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Lax permet OAuth tout en protégeant contre CSRF
 
 # Configuration de compression pour améliorer les performances (optionnel)
 if COMPRESS_AVAILABLE:
@@ -2170,7 +2170,7 @@ def callback():
             max_age=JWT_EXPIRATION_HOURS * 3600,
             httponly=True,
             secure=True,  # HTTPS requis avec Cloudflare Tunnels
-            samesite='Strict'  # Protection CSRF renforcée
+            samesite='Lax'  # Lax permet OAuth tout en protégeant contre CSRF
         )
         
         return response
