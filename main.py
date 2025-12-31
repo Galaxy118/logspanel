@@ -245,7 +245,12 @@ def invalidate_all_server_caches(server_id=None):
         log_counts_cache.invalidate()
         admin_role_cache.invalidate()
         discord_role_cache.invalidate()
-        debug_log("🗑️ Tous les caches ont été invalidés")
+        
+        # CRITIQUE: Recharger la configuration depuis le fichier
+        # Car server_config garde l'ancienne config en mémoire
+        server_config.load_config()
+        
+        debug_log("🗑️ Tous les caches invalidés et configuration rechargée")
 
 # Load environment variables with a safe encoding fallback
 try:
@@ -2555,6 +2560,9 @@ def edit_server(server_id):
             # Mettre à jour la configuration
             server_config.update_server_config(server_id, config_data)
             
+            # CRITIQUE: Recharger immédiatement la config pour éviter désynchronisation
+            server_config.load_config()
+            
             # Invalider les caches pour ce serveur
             invalidate_all_server_caches(server_id)
             
@@ -2779,6 +2787,9 @@ def create_server():
         server_config.create_server(server_id, config_data)
         debug_log("✅ Serveur créé avec succès", server_id=server_id, level="INFO")
         
+        # CRITIQUE: Recharger immédiatement la config pour éviter désynchronisation
+        server_config.load_config()
+        
         # Invalider TOUS les caches pour que le nouveau serveur apparaisse partout
         invalidate_all_server_caches()
         
@@ -2854,6 +2865,9 @@ def delete_server(server_id):
         
         # Supprimer le serveur
         server_config.delete_server(server_id)
+        
+        # CRITIQUE: Recharger immédiatement la config pour éviter désynchronisation
+        server_config.load_config()
         
         # Synchroniser les règles firewall automatiquement
         sync_firewall_rules()
