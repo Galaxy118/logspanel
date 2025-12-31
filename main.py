@@ -531,6 +531,56 @@ def is_super_admin_id(user_id):
 CLIENT_DISCORD_GUILD_ID = os.getenv('CLIENT_DISCORD_GUILD_ID', '')
 CLIENT_DISCORD_ROLE_ID = os.getenv('CLIENT_DISCORD_ROLE_ID', '')
 
+# Configuration logs généraux Discord
+GENERAL_LOGS_CHANNEL_ID = os.getenv('GENERAL_LOGS_CHANNEL_ID', '')
+
+def send_general_discord_log(title, description, color=0x3498db, fields=None):
+    """
+    Envoie un log dans le salon Discord général pour les actions importantes.
+    Couleurs suggérées: 0x2ecc71 (vert/succès), 0xe74c3c (rouge/danger), 0x3498db (bleu/info), 0xf39c12 (orange/warning)
+    """
+    if not GENERAL_LOGS_CHANNEL_ID or not DISCORD_BOT_TOKEN:
+        debug_log("⚠️ Logs généraux Discord non configurés", 
+                 channel_id=bool(GENERAL_LOGS_CHANNEL_ID),
+                 bot_token=bool(DISCORD_BOT_TOKEN),
+                 level="WARNING")
+        return False
+    
+    try:
+        embed = {
+            'title': title,
+            'description': description,
+            'color': color,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'footer': {'text': 'Panel Logs - Actions Administratives'}
+        }
+        
+        if fields:
+            embed['fields'] = fields
+        
+        payload = {'embeds': [embed]}
+        headers = {
+            'Authorization': f'Bot {DISCORD_BOT_TOKEN}',
+            'Content-Type': 'application/json'
+        }
+        
+        response = requests.post(
+            f'https://discord.com/api/channels/{GENERAL_LOGS_CHANNEL_ID}/messages',
+            json=payload,
+            headers=headers,
+            timeout=5
+        )
+        
+        if response.status_code in [200, 201, 204]:
+            debug_log("✅ Log général Discord envoyé", title=title)
+            return True
+        else:
+            debug_log("❌ Erreur envoi log général", status=response.status_code, level="ERROR")
+            return False
+    except Exception as e:
+        debug_log("❌ Exception envoi log général", error=str(e), level="ERROR")
+        return False
+
 def is_client_enabled():
     """Vérifie si le panel client est configuré"""
     return bool(CLIENT_DISCORD_GUILD_ID and CLIENT_DISCORD_ROLE_ID)
@@ -2383,46 +2433,42 @@ def dashboard(server=None):
 @app.route('/admin/servers')
 @require_auth(admin_required=True)
 def admin_servers():
-    """Interface d'administration pour gérer les serveurs"""
+    """Interface d'administration pour gérer les serveurs - SUPER_ADMIN et admins uniquement"""
     
     # Utiliser les permissions du token JWT
     user_permissions = request.user_data['permissions']
     user_id = request.user_data['user_id']
     
-    # Vérifier si l'utilisateur est super-admin ou client
+    # Vérifier si l'utilisateur est super-admin
     is_super_admin = user_permissions.get('is_super_admin', False)
     is_client = user_permissions.get('is_client', False)
+    admin_servers_list = user_permissions.get('admin_servers', [])
+    
+    # Les propriétaires et clients sont redirigés vers /account
+    # Seuls les SUPER_ADMIN et les vrais admins (admin_servers) ont accès ici
+    if not is_super_admin and (admin_servers_list == [] or admin_servers_list is None):
+        debug_log("🚫 Accès admin refusé - redirection vers /account", user_id=user_id)
+        return redirect(url_for('account'))
     
     if is_super_admin:
         # Super-admin a accès à tous les serveurs
         user_admin_servers = server_config.get_all_servers()
     else:
-        # Filtrer selon les permissions admin de l'utilisateur
+        # Filtrer selon les permissions admin de l'utilisateur (PAS les owned_servers)
         user_admin_servers = {}
         all_servers = server_config.get_all_servers()
-        admin_servers_list = user_permissions.get('admin_servers', [])
-        owned_servers = user_permissions.get('owned_servers', [])
         
         if admin_servers_list == 'all':
             user_admin_servers = all_servers
-        else:
-            # Ajouter les serveurs où l'utilisateur est admin
-            if isinstance(admin_servers_list, list):
-                for server_id in admin_servers_list:
-                    if server_id in all_servers:
-                        user_admin_servers[server_id] = all_servers[server_id]
-            
-            # Ajouter les serveurs dont l'utilisateur est propriétaire
-            if isinstance(owned_servers, list):
-                for server_id in owned_servers:
-                    if server_id in all_servers and server_id not in user_admin_servers:
-                        user_admin_servers[server_id] = all_servers[server_id]
+        elif isinstance(admin_servers_list, list):
+            # Seulement les serveurs où l'utilisateur est admin via rôle Discord
+            for server_id in admin_servers_list:
+                if server_id in all_servers:
+                    user_admin_servers[server_id] = all_servers[server_id]
     
     # Si l'utilisateur n'est admin d'aucun serveur, rediriger
-    # Les clients sans serveur sont redirigés vers leur page compte pour en créer un
     if not user_admin_servers and not is_super_admin:
-        if is_client:
-            return redirect(url_for('account'))  # Rediriger les clients vers leur page compte
+        return redirect(url_for('account'))
         abort(403)
     
     # Permettre le cache mais avec option de forcer le rafraîchissement via paramètre URL
@@ -2508,7 +2554,26 @@ def edit_server(server_id):
             if old_config and old_config.get('database_uri') != config_data.get('database_uri'):
                 sync_firewall_rules()
             
-            # Envoyer un log Discord pour la modification
+            # Envoyer un log dans le salon général Discord
+            username = request.user_data.get('username', 'Inconnu')
+            srv_conf_check = server_config.get_server(server_id)
+            is_owner_check = False
+            if srv_conf_check:
+                owner_id_check = str(srv_conf_check.get('owner_id', '') or '')
+                is_owner_check = owner_id_check and owner_id_check == str(user_id)
+            
+            send_general_discord_log(
+                title='✏️ Serveur Modifié',
+                description=f'La configuration d\'un serveur a été modifiée.',
+                color=0xf39c12,  # Orange
+                fields=[
+                    {'name': '🖥️ Serveur', 'value': f'{config_data.get("display_name", server_id)} (`{server_id}`)', 'inline': True},
+                    {'name': '👤 Modifié par', 'value': f'{username} (`{user_id}`)', 'inline': True},
+                    {'name': '📝 Type', 'value': 'Propriétaire' if is_owner_check else 'Admin', 'inline': True}
+                ]
+            )
+            
+            # Envoyer un log Discord pour la modification (dans le salon du serveur)
             try:
                 username = request.user_data.get('username', 'Inconnu')
                 server_name = config_data.get('display_name', server_id)
@@ -2568,11 +2633,20 @@ def edit_server(server_id):
 @require_auth(admin_required=True)
 def refresh_server_logo(server_id):
     """Force la récupération du logo Discord d'un serveur"""
+    user_id = request.user_data['user_id']
     user_permissions = request.user_data['permissions']
     
     if not user_permissions.get('is_super_admin', False):
         admin_servers = user_permissions.get('admin_servers', [])
-        if admin_servers != 'all' and server_id not in admin_servers:
+        
+        # Vérifier aussi si l'utilisateur est propriétaire du serveur
+        srv_conf = server_config.get_server(server_id)
+        is_owner = False
+        if srv_conf:
+            owner_id = str(srv_conf.get('owner_id', '') or '')
+            is_owner = owner_id and owner_id == str(user_id)
+        
+        if admin_servers != 'all' and server_id not in admin_servers and not is_owner:
             return jsonify({'error': 'Accès refusé'}), 403
     
     try:
@@ -2688,9 +2762,21 @@ def create_server():
         # Synchroniser les règles firewall automatiquement
         sync_firewall_rules()
         
-        # Envoyer un log Discord pour la création
+        # Envoyer un log dans le salon général Discord
+        username = request.user_data.get('username', 'Inconnu')
+        send_general_discord_log(
+            title='➕ Nouveau Serveur Créé',
+            description=f'Un nouveau serveur a été ajouté au panel.',
+            color=0x2ecc71,  # Vert
+            fields=[
+                {'name': '🖥️ Serveur', 'value': f'{display_name} (`{server_id}`)', 'inline': True},
+                {'name': '👤 Créé par', 'value': f'{username} (`{user_id}`)', 'inline': True},
+                {'name': '📝 Type', 'value': 'Client' if (is_client and not is_super_admin) else 'Admin', 'inline': True}
+            ]
+        )
+        
+        # Envoyer un log Discord pour la création (dans le salon du serveur)
         try:
-            username = request.user_data.get('username', 'Inconnu')
             current_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
             
             embed = {
@@ -2772,6 +2858,18 @@ def delete_server(server_id):
         
         # Invalider TOUS les caches (la liste des serveurs a changé)
         invalidate_all_server_caches()
+        
+        # Envoyer un log dans le salon général Discord
+        send_general_discord_log(
+            title='🗑️ Serveur Supprimé',
+            description=f'Un serveur a été supprimé du panel.',
+            color=0xe74c3c,  # Rouge
+            fields=[
+                {'name': '🖥️ Serveur', 'value': f'{server_name} (`{server_id}`)', 'inline': True},
+                {'name': '👤 Supprimé par', 'value': f'{username} (`{user_id}`)', 'inline': True},
+                {'name': '📝 Type', 'value': 'Propriétaire' if is_owner else 'Admin', 'inline': True}
+            ]
+        )
         
         return jsonify({'success': True, 'message': f'Serveur {server_id} supprimé avec succès'})
         
