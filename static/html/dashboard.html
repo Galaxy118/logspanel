@@ -68,6 +68,9 @@
                         Types de logs
                         <span class="logs-total-count">{{ total_logs }}</span>
                     </h3>
+                    <div class="log-type-search">
+                        <input type="text" id="logTypeSearch" placeholder="🔍 Rechercher un type..." class="log-type-search-input" />
+                    </div>
                     <div class="log-types-list">
                         <div class="log-type-item log-type-all" data-type="all">
                             <span class="log-type-count">{{ total_logs }}</span>
@@ -79,6 +82,7 @@
                             <span class="log-type-name">{{ log_type }}</span>
                         </div>
                         {% endfor %}
+                        <div class="log-type-no-results">Aucun type trouvé</div>
                     </div>
                 </div>
                 

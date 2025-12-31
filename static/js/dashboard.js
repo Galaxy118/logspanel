@@ -112,4 +112,49 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Barre de recherche des types de logs
+  const logTypeSearchInput = document.getElementById('logTypeSearch');
+  const logTypeNoResults = document.querySelector('.log-type-no-results');
+
+  if (logTypeSearchInput) {
+    logTypeSearchInput.addEventListener('input', function() {
+      const searchTerm = this.value.toLowerCase().trim();
+      let visibleCount = 0;
+
+      logTypeItems.forEach(function(item) {
+        const typeName = item.querySelector('.log-type-name');
+        const typeText = typeName ? typeName.textContent.toLowerCase() : '';
+        const dataType = item.getAttribute('data-type') || '';
+        
+        // Le type "all" (Tous) est toujours visible si le terme est vide
+        if (dataType === 'all' && searchTerm === '') {
+          item.classList.remove('hidden');
+          visibleCount++;
+        } else if (typeText.includes(searchTerm) || dataType.toLowerCase().includes(searchTerm)) {
+          item.classList.remove('hidden');
+          visibleCount++;
+        } else {
+          item.classList.add('hidden');
+        }
+      });
+
+      // Afficher le message "Aucun résultat" si nécessaire
+      if (logTypeNoResults) {
+        if (visibleCount === 0) {
+          logTypeNoResults.classList.add('visible');
+        } else {
+          logTypeNoResults.classList.remove('visible');
+        }
+      }
+    });
+
+    // Permettre de vider la recherche avec Escape
+    logTypeSearchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        this.value = '';
+        this.dispatchEvent(new Event('input'));
+      }
+    });
+  }
 });

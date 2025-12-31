@@ -147,6 +147,48 @@
        font-weight: 600;
        margin-left: auto;
    }
+
+   /* Barre de recherche des types de logs */
+   .log-type-search {
+       margin-bottom: 0.75rem;
+   }
+
+   .log-type-search-input {
+       width: 100%;
+       padding: 0.5rem 0.75rem;
+       background: var(--bg-secondary);
+       border: 1px solid var(--border-color);
+       border-radius: 8px;
+       color: var(--text-color);
+       font-size: 0.85rem;
+       transition: all 0.2s ease;
+   }
+
+   .log-type-search-input::placeholder {
+       color: var(--text-muted);
+   }
+
+   .log-type-search-input:focus {
+       outline: none;
+       border-color: var(--accent-color);
+       box-shadow: 0 0 0 2px rgba(141, 18, 171, 0.2);
+   }
+
+   .log-type-item.hidden {
+       display: none !important;
+   }
+
+   .log-type-no-results {
+       text-align: center;
+       color: var(--text-muted);
+       padding: 1rem;
+       font-size: 0.85rem;
+       display: none;
+   }
+
+   .log-type-no-results.visible {
+       display: block;
+   }
    
    .logs-main-area {
         background: var(--card-bg);
