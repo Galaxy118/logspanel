@@ -1723,7 +1723,11 @@ def index():
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
     
     # Vérifier si le captcha d'entrée est requis et validé
-    if is_turnstile_enabled() and not is_entry_captcha_valid():
+    # SKIP si l'utilisateur a déjà un JWT valide (déjà authentifié)
+    token = get_token_from_request()
+    has_valid_jwt = token and verify_jwt_token(token) is not None
+    
+    if is_turnstile_enabled() and not has_valid_jwt and not is_entry_captcha_valid():
         return redirect(url_for('captcha_page'))
     
     # Afficher la page de sélection de serveurs avec informations d'authentification
@@ -1797,12 +1801,42 @@ def index():
 def auth_page(server):
     """Page intermédiaire avant la connexion Discord"""
     # Vérifier si le captcha d'entrée a été validé
-    if is_turnstile_enabled() and not is_entry_captcha_valid():
+    # SKIP si l'utilisateur a déjà un JWT valide
+    token = get_token_from_request()
+    payload = verify_jwt_token(token) if token else None
+    has_valid_jwt = payload is not None
+    
+    if is_turnstile_enabled() and not has_valid_jwt and not is_entry_captcha_valid():
         return redirect(url_for('captcha_page'))
     
     # Valider le serveur
     if not server_config.is_valid_server(server):
         return redirect(url_for('index'))
+    
+    # Si l'utilisateur est déjà connecté, vérifier s'il a accès et rediriger directement
+    if has_valid_jwt:
+        user_permissions = payload.get('server_permissions', {})
+        user_id = payload.get('user_id')
+        
+        # Vérifier l'accès au serveur
+        has_access = False
+        if user_permissions.get('is_super_admin', False):
+            has_access = True
+        else:
+            accessible_servers = user_permissions.get('accessible_servers', [])
+            if accessible_servers == 'all' or server in accessible_servers:
+                has_access = True
+            else:
+                # Vérifier si propriétaire du serveur
+                srv_conf = server_config.get_server(server)
+                if srv_conf:
+                    owner_id = str(srv_conf.get('owner_id', '') or '')
+                    if owner_id and owner_id == str(user_id):
+                        has_access = True
+        
+        if has_access:
+            # Rediriger directement vers le dashboard
+            return redirect(url_for('dashboard', server=server))
     
     # Récupérer la configuration du serveur
     server_conf = get_server_config(server)
@@ -1951,7 +1985,11 @@ from urllib.parse import quote
 def login():
     """Route d'authentification Discord avec JWT"""
     # Vérifier si le captcha d'entrée a été validé
-    if is_turnstile_enabled() and not is_entry_captcha_valid():
+    # SKIP si l'utilisateur a déjà un JWT valide
+    token = get_token_from_request()
+    has_valid_jwt = token and verify_jwt_token(token) is not None
+    
+    if is_turnstile_enabled() and not has_valid_jwt and not is_entry_captcha_valid():
         return redirect(url_for('captcha_page'))
     
     # Récupérer le serveur sélectionné depuis les paramètres URL
