@@ -1658,6 +1658,11 @@ def captcha_page():
     if not is_turnstile_enabled():
         return redirect(url_for('index'))
     
+    # Si l'utilisateur a un JWT valide, pas besoin de captcha
+    token = get_token_from_request()
+    if token and verify_jwt_token(token) is not None:
+        return redirect(url_for('index'))
+    
     # Si le captcha est déjà validé, rediriger vers l'index
     if is_entry_captcha_valid():
         return redirect(url_for('index'))
