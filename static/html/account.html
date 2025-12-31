@@ -85,13 +85,18 @@
                         </div>
                     </div>
                     
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex gap-2 flex-wrap align-items-center">
                         <a href="{{ url_for('dashboard', server=client_server.id) }}" class="btn-primaryx">
                             <i class="fas fa-chart-line me-1"></i> Voir les logs
                         </a>
                         <a href="{{ url_for('edit_server', server_id=client_server.id) }}" class="btn-outline" style="border-color: #2ecc71; color: #2ecc71;">
                             <i class="fas fa-edit me-1"></i> Configurer
                         </a>
+                        <button type="button" class="btn-outline btn-delete-server" 
+                                style="border-color: #e74c3c; color: #e74c3c; margin-left: auto;"
+                                onclick="confirmDeleteServer('{{ client_server.id }}', '{{ client_server.config.display_name if client_server.config else client_server.id }}')">
+                            <i class="fas fa-trash me-1"></i> Supprimer
+                        </button>
                     </div>
                 </div>
             {% elif is_client and not client_server %}
@@ -250,6 +255,43 @@
             submitBtn.innerHTML = originalText;
         }
     });
+    </script>
+    {% endif %}
+    
+    {% if client_server %}
+    <script>
+    // Fonction de confirmation et suppression du serveur
+    async function confirmDeleteServer(serverId, serverName) {
+        const confirmed = confirm(`⚠️ ATTENTION ⚠️\n\nÊtes-vous sûr de vouloir supprimer le serveur "${serverName}" ?\n\nCette action est IRRÉVERSIBLE et supprimera toute la configuration du serveur.`);
+        
+        if (!confirmed) return;
+        
+        // Double confirmation pour éviter les erreurs
+        const doubleConfirm = confirm(`Dernière confirmation :\n\nSupprimer définitivement "${serverName}" ?`);
+        
+        if (!doubleConfirm) return;
+        
+        try {
+            const response = await fetch(`/admin/servers/${serverId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('✅ Serveur supprimé avec succès !');
+                window.location.reload();
+            } else {
+                alert('❌ Erreur: ' + (data.error || 'Une erreur est survenue'));
+            }
+        } catch (error) {
+            console.error('Erreur:', error);
+            alert('❌ Erreur de connexion. Veuillez réessayer.');
+        }
+    }
     </script>
     {% endif %}
 </body>
