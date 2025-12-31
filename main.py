@@ -1981,7 +1981,15 @@ def account():
 
     admin_servers = perms.get('admin_servers', [])
     is_super_admin = perms.get('is_super_admin', False)
-    is_client = perms.get('is_client', False)
+    is_client_jwt = perms.get('is_client', False)
+    
+    # IMPORTANT: Vérifier dynamiquement le rôle client (le JWT peut être obsolète)
+    is_client = is_client_jwt
+    if not is_super_admin and not is_client and is_client_enabled():
+        access_token = user.get('access_token')
+        if access_token:
+            is_client = check_client_role(access_token)
+            debug_log("🔄 Vérification dynamique rôle client (account)", result=is_client, user_id=user_id)
     
     # IMPORTANT: Recalculer owned_servers dynamiquement (pas depuis le JWT)
     # Car le serveur peut avoir été créé APRÈS la connexion
@@ -2681,11 +2689,21 @@ def create_server():
     
     # Vérifier que l'utilisateur est SUPER_ADMIN ou Client autorisé
     is_super_admin = user_permissions.get('is_super_admin', False)
-    is_client = user_permissions.get('is_client', False)
+    is_client_jwt = user_permissions.get('is_client', False)
+    
+    # IMPORTANT: Vérifier dynamiquement le rôle client (le JWT peut être obsolète)
+    is_client = is_client_jwt
+    if not is_super_admin and not is_client and is_client_enabled():
+        # Revérifier le rôle Discord en temps réel
+        access_token = request.user_data.get('access_token')
+        if access_token:
+            is_client = check_client_role(access_token)
+            debug_log("🔄 Vérification dynamique rôle client", result=is_client)
     
     debug_log("🔑 Vérification des permissions", 
              is_super_admin=is_super_admin, 
-             is_client=is_client)
+             is_client=is_client,
+             is_client_jwt=is_client_jwt)
     
     if not is_super_admin and not is_client:
         debug_log("❌ Accès refusé - utilisateur non autorisé", level="WARNING")
