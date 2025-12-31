@@ -43,17 +43,17 @@ document.addEventListener('DOMContentLoaded', function() {
         body: formData
       })
       .then(response => response.json())
-      .then(result => {
+      .then(async result => {
         if (result.success) {
-          alert('Serveur créé avec succès!');
+          await showSuccess('Serveur créé avec succès!', '✅ Création réussie');
           location.reload();
         } else {
-          alert('Erreur: ' + result.error);
+          await showError(result.error, '❌ Erreur de création');
         }
       })
-      .catch(error => {
+      .catch(async error => {
         console.error('Erreur:', error);
-        alert('Erreur lors de la création du serveur');
+        await showError('Erreur lors de la création du serveur', '❌ Erreur réseau');
       });
     });
   }
@@ -80,17 +80,17 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         })
         .then(response => response.json())
-        .then(result => {
+        .then(async result => {
           if (result.success) {
-            alert('Serveur supprimé avec succès!');
+            await showSuccess('Serveur supprimé avec succès!', '✅ Suppression réussie');
             location.reload();
           } else {
-            alert('Erreur: ' + result.error);
+            await showError(result.error, '❌ Erreur de suppression');
           }
         })
-        .catch(error => {
+        .catch(async error => {
           console.error('Erreur:', error);
-          alert('Erreur lors de la suppression du serveur');
+          await showError('Erreur lors de la suppression du serveur', '❌ Erreur réseau');
         });
       }
     });

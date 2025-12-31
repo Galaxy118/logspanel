@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/account.css') }}?v={{ ASSET_VERSION }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}?v={{ ASSET_VERSION }}">
 </head>
 <body>
     <div class="container">
@@ -214,6 +215,7 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/modal.js') }}?v={{ ASSET_VERSION }}"></script>
     <script src="{{ url_for('static', filename='js/account.js') }}?v={{ ASSET_VERSION }}"></script>
     
     {% if is_client and not client_server %}
@@ -241,16 +243,16 @@
             
             if (data.success) {
                 // Afficher un message de succès
-                alert('Serveur créé avec succès ! La page va se recharger.');
+                await showSuccess('Serveur créé avec succès ! La page va se recharger.', '✅ Création réussie');
                 window.location.reload();
             } else {
-                alert('Erreur: ' + (data.error || 'Une erreur est survenue'));
+                await showError(data.error || 'Une erreur est survenue', '❌ Erreur de création');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
             }
         } catch (error) {
             console.error('Erreur:', error);
-            alert('Erreur de connexion. Veuillez réessayer.');
+            await showError('Erreur de connexion. Veuillez réessayer.', '❌ Erreur réseau');
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         }
@@ -262,12 +264,20 @@
     <script>
     // Fonction de confirmation et suppression du serveur
     async function confirmDeleteServer(serverId, serverName) {
-        const confirmed = confirm(`⚠️ ATTENTION ⚠️\n\nÊtes-vous sûr de vouloir supprimer le serveur "${serverName}" ?\n\nCette action est IRRÉVERSIBLE et supprimera toute la configuration du serveur.`);
+        const confirmed = await showConfirm(
+            `Êtes-vous sûr de vouloir supprimer le serveur "${serverName}" ?\n\nCette action est IRRÉVERSIBLE et supprimera toute la configuration du serveur.`,
+            '⚠️ ATTENTION',
+            { type: 'warning', confirmText: 'Continuer', danger: true }
+        );
         
         if (!confirmed) return;
         
         // Double confirmation pour éviter les erreurs
-        const doubleConfirm = confirm(`Dernière confirmation :\n\nSupprimer définitivement "${serverName}" ?`);
+        const doubleConfirm = await showConfirm(
+            `Supprimer définitivement "${serverName}" ?`,
+            '🗑️ Dernière confirmation',
+            { type: 'error', confirmText: 'Supprimer', cancelText: 'Annuler', danger: true }
+        );
         
         if (!doubleConfirm) return;
         
@@ -282,14 +292,14 @@
             const data = await response.json();
             
             if (data.success) {
-                alert('✅ Serveur supprimé avec succès !');
+                await showSuccess('Serveur supprimé avec succès !', '✅ Suppression réussie');
                 window.location.reload();
             } else {
-                alert('❌ Erreur: ' + (data.error || 'Une erreur est survenue'));
+                await showError(data.error || 'Une erreur est survenue', '❌ Erreur de suppression');
             }
         } catch (error) {
             console.error('Erreur:', error);
-            alert('❌ Erreur de connexion. Veuillez réessayer.');
+            await showError('Erreur de connexion. Veuillez réessayer.', '❌ Erreur réseau');
         }
     }
     </script>
