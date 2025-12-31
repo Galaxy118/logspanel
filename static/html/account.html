@@ -262,6 +262,15 @@
     
     {% if client_server %}
     <script>
+    // SÉCURITÉ: Récupère le token CSRF
+    function getCsrfToken() {
+        const csrfInput = document.querySelector('input[name="csrf_token"]');
+        if (csrfInput) return csrfInput.value;
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) return csrfMeta.content;
+        return '';
+    }
+
     // Fonction de confirmation et suppression du serveur
     async function confirmDeleteServer(serverId, serverName) {
         const confirmed = await showConfirm(
@@ -285,7 +294,8 @@
             const response = await fetch(`/admin/servers/${serverId}/delete`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
                 }
             });
             
