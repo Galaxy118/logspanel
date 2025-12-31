@@ -48,6 +48,9 @@
         {# Section Client/Propriétaire - Gestion de leur serveur #}
         {% if is_client or is_owner %}
         <div class="section animate__animated animate__fadeIn" style="animation-delay: 0.1s;">
+            {# Token CSRF caché toujours présent pour les actions JS #}
+            <input type="hidden" id="csrf_token_hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            
             <h2><i class="fas fa-store"></i> {% if is_owner %}Mon Serveur{% else %}Espace Client{% endif %}</h2>
             
             {% if client_server %}
