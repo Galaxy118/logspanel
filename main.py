@@ -2692,9 +2692,14 @@ def create_server():
         return jsonify({'error': 'Accès refusé. Vous devez être Super Admin ou Client autorisé pour créer des serveurs.'}), 403
     
     # Limiter les clients à 1 seul serveur
+    # IMPORTANT: Recalculer dynamiquement depuis la config (pas depuis le JWT qui peut être obsolète)
     if is_client and not is_super_admin:
-        owned_servers = user_permissions.get('owned_servers', [])
-        debug_log("🔍 Vérification limite client", owned_count=len(owned_servers))
+        all_servers = server_config.get_all_servers()
+        owned_servers = [
+            sid for sid, conf in all_servers.items()
+            if str(conf.get('owner_id', '') or '') == str(user_id)
+        ]
+        debug_log("🔍 Vérification limite client (dynamique)", owned_count=len(owned_servers))
         if owned_servers and len(owned_servers) > 0:
             debug_log("❌ Limite atteinte - client a déjà un serveur", 
                      owned_servers=owned_servers,
