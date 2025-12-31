@@ -2093,6 +2093,11 @@ def callback():
             # Redirection générale
             redirect_url = url_for('index')
         
+        # Marquer le captcha d'entrée comme validé
+        # L'authentification Discord est plus sécurisée que le captcha,
+        # donc on peut le considérer comme passé après un login Discord réussi
+        mark_entry_captcha_verified()
+        
         # Créer la réponse avec le cookie JWT
         # SÉCURITÉ: secure=True obligatoire avec Cloudflare Tunnels (HTTPS)
         response = make_response(redirect(redirect_url))
