@@ -1,6 +1,5 @@
-// Mise à jour des statuts des serveurs et interactions
-let lastServerStatus = {};
-let isUpdating = false;
+// Mise à jour des statuts des serveurs via le module centralisé ServerSync
+// Ce fichier utilise maintenant le module ServerSync pour éviter les désynchronisations
 
 function findServerCard(serverId) {
   return document.querySelector(`[data-server-id="${serverId}"]`);
@@ -27,28 +26,32 @@ function updateServerCard(serverId, serverData) {
   }, 50);
 }
 
-function refreshServerStatuses() {
-  if (isUpdating) return;
-  isUpdating = true;
-  fetch('/api/servers/status')
-    .then(res => res.json())
-    .then(data => {
-      Object.keys(data).forEach(serverId => {
-        const serverData = data[serverId];
-        const prev = lastServerStatus[serverId];
-        if (!prev || prev.status !== serverData.status) {
-          updateServerCard(serverId, serverData);
-        }
-        lastServerStatus[serverId] = serverData;
-      });
-    })
-    .catch(err => console.error('Erreur lors de la mise à jour du statut:', err))
-    .finally(() => { isUpdating = false; });
+// Fonction appelée par ServerSync lors des mises à jour
+function onServerStatusUpdate(servers, changedServers) {
+  // Mettre à jour toutes les cartes serveur
+  Object.keys(servers).forEach(serverId => {
+    updateServerCard(serverId, servers[serverId]);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  refreshServerStatuses();
-  setInterval(refreshServerStatuses, 30000);
+  // Utiliser ServerSync si disponible, sinon fallback
+  if (typeof ServerSync !== 'undefined') {
+    // S'abonner aux mises à jour centralisées
+    ServerSync.subscribe(onServerStatusUpdate);
+    console.log('[server_selection] Utilisation de ServerSync pour la synchronisation');
+  } else {
+    // Fallback: mode legacy (ne devrait pas arriver si server_sync.js est chargé)
+    console.warn('[server_selection] ServerSync non disponible, mode legacy activé');
+    fetch('/api/servers/status')
+      .then(res => res.json())
+      .then(data => {
+        Object.keys(data).forEach(serverId => {
+          updateServerCard(serverId, data[serverId]);
+        });
+      })
+      .catch(err => console.error('Erreur lors de la mise à jour du statut:', err));
+  }
 
   // Gérer l'alerte d'erreur - fermeture automatique après 8 secondes
   const errorAlert = document.getElementById('errorAlert');

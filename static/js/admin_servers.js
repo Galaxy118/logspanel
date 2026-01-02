@@ -1,19 +1,23 @@
-function updateServerStatus() {
+// Mise à jour des statuts via le module centralisé ServerSync
+function updateServerStatusFromData(servers) {
+  Object.keys(servers).forEach(serverId => {
+    const serverData = servers[serverId];
+    const statusBadge = document.querySelector(`[data-server-id="${serverId}"] .status-badge`);
+    if (statusBadge) {
+      statusBadge.className = `status-badge ${serverData.status === 'online' ? 'status-online' : 'status-offline'}`;
+      statusBadge.innerHTML = `<i class="fas fa-circle me-1"></i>${serverData.status === 'online' ? 'Online' : 'Offline'}`;
+    }
+  });
+}
+
+// Fallback pour quand ServerSync n'est pas disponible
+function updateServerStatusLegacy() {
   fetch('/api/servers/status')
     .then(response => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
     })
-    .then(data => {
-      Object.keys(data).forEach(serverId => {
-        const serverData = data[serverId];
-        const statusBadge = document.querySelector(`[data-server-id="${serverId}"] .status-badge`);
-        if (statusBadge) {
-          statusBadge.className = `status-badge ${serverData.status === 'online' ? 'status-online' : 'status-offline'}`;
-          statusBadge.innerHTML = `<i class="fas fa-circle me-1"></i>${serverData.status === 'online' ? 'Online' : 'Offline'}`;
-        }
-      });
-    })
+    .then(data => updateServerStatusFromData(data))
     .catch(error => console.error('Erreur lors de la mise à jour du statut:', error));
 }
 
@@ -28,6 +32,19 @@ function getCsrfToken() {
 
 // Gestion du formulaire de création de serveur
 document.addEventListener('DOMContentLoaded', function() {
+  // Utiliser ServerSync si disponible
+  if (typeof ServerSync !== 'undefined') {
+    ServerSync.subscribe(function(servers) {
+      updateServerStatusFromData(servers);
+    });
+    console.log('[admin_servers] Utilisation de ServerSync pour la synchronisation');
+  } else {
+    // Fallback: mode legacy
+    console.warn('[admin_servers] ServerSync non disponible, mode legacy activé');
+    setInterval(updateServerStatusLegacy, 30000);
+    setTimeout(updateServerStatusLegacy, 1000);
+  }
+
   const createServerForm = document.getElementById('createServerForm');
   if (createServerForm) {
     createServerForm.addEventListener('submit', function(e) {
@@ -45,6 +62,10 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(async result => {
         if (result.success) {
+          // Forcer un rafraîchissement complet après création
+          if (typeof ServerSync !== 'undefined') {
+            await ServerSync.forceRefresh();
+          }
           await showSuccess('Serveur créé avec succès!', '✅ Création réussie');
           location.reload();
         } else {
@@ -82,6 +103,10 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(async result => {
           if (result.success) {
+            // Forcer un rafraîchissement complet après suppression
+            if (typeof ServerSync !== 'undefined') {
+              await ServerSync.forceRefresh();
+            }
             await showSuccess('Serveur supprimé avec succès!', '✅ Suppression réussie');
             location.reload();
           } else {
@@ -95,22 +120,4 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
-
-  // Mettre à jour les statuts toutes les 2 minutes
-  setInterval(updateServerStatus, 120000);
-  
-  // Première mise à jour après 3 secondes
-  setTimeout(updateServerStatus, 3000);
-  
-  // Mise à jour lors du focus de la page
-  let lastFocusUpdate = 0;
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-      const now = Date.now();
-      if (now - lastFocusUpdate > 30000) {
-        setTimeout(updateServerStatus, 1000);
-        lastFocusUpdate = now;
-      }
-    }
-  });
 });

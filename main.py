@@ -227,6 +227,8 @@ def invalidate_all_server_caches(server_id=None):
     Si server_id est fourni, invalide uniquement ce serveur.
     Sinon, invalide TOUS les caches.
     """
+    global _last_server_config_update
+    
     if server_id:
         # Invalider les caches pour un serveur spécifique
         status_cache.invalidate(server_id)
@@ -251,6 +253,9 @@ def invalidate_all_server_caches(server_id=None):
         server_config.load_config()
         
         debug_log("🗑️ Tous les caches invalidés et configuration rechargée")
+    
+    # Marquer qu'une modification a été faite pour la synchronisation client
+    _last_server_config_update = time.time()
 
 # Load environment variables with a safe encoding fallback
 try:
@@ -2251,9 +2256,17 @@ def logout():
 def vite_client_stub():
     return ('', 204)
 
+# Variable globale pour stocker le timestamp de dernière modification
+_last_server_config_update = time.time()
+
+def mark_server_config_updated():
+    """Marque une modification de la configuration des serveurs"""
+    global _last_server_config_update
+    _last_server_config_update = time.time()
+
 @app.route('/api/servers/status')
 def get_servers_status():
-    """API pour obtenir le statut de tous les serveurs avec cache optimisé"""
+    """API pour obtenir le statut de tous les serveurs avec cache optimisé et synchronisation"""
     # Vérifier si on force le rafraîchissement
     force_refresh = request.args.get('force', 'false').lower() == 'true'
     use_cache = not force_refresh
@@ -2261,9 +2274,21 @@ def get_servers_status():
     # Nettoyer les caches expirés avant de récupérer les statuts
     status_cache.cleanup_expired()
     
-    response = jsonify(get_all_servers_status(use_cache=use_cache))
-    # Ajouter des headers de cache pour les API
-    response.headers['Cache-Control'] = 'public, max-age=30'  # Cache de 30 secondes
+    # Récupérer les statuts
+    servers_status = get_all_servers_status(use_cache=use_cache)
+    
+    # Ajouter des métadonnées pour la synchronisation client
+    response_data = {
+        'servers': servers_status,
+        'timestamp': int(time.time() * 1000),  # Timestamp en millisecondes pour JS
+        'last_config_update': int(_last_server_config_update * 1000)
+    }
+    
+    response = jsonify(response_data)
+    # Headers pour éviter les problèmes de cache entre requêtes
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
     return response
     
 
