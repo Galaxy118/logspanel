@@ -95,12 +95,12 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Extraire les hôtes et ports MySQL avec Python
-DB_HOSTS=$(python3 -c "
+DB_HOSTS=$(python3 <<PYTHON_SCRIPT
 import json
 import re
 import sys
 
-config_file = '$SERVERS_CONFIG'
+config_file = '${SERVERS_CONFIG}'
 
 try:
     with open(config_file, 'r', encoding='utf-8') as f:
@@ -135,7 +135,8 @@ try:
 except Exception as e:
     print(f'ERREUR: {e}', file=sys.stderr)
     sys.exit(1)
-")
+PYTHON_SCRIPT
+)
 
 if [[ -z "$DB_HOSTS" ]]; then
     print_warning "Aucun serveur MySQL trouvé dans la configuration"
