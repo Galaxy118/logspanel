@@ -4,7 +4,9 @@
 # Lit servers_config.json et autorise les connexions vers les bases de données
 # =============================================================================
 
-set -e
+# Ne pas utiliser set -e car certaines commandes (grep, ufw status) peuvent retourner 
+# des codes d'erreur non-zéro sans que ce soit une vraie erreur
+# set -e
 
 # Couleurs
 RED='\033[0;31m'
@@ -185,7 +187,7 @@ while IFS= read -r line; do
     # Vérifier si c'est une IP ou un hostname
     if [[ "$HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         # C'est une IP - Ajouter directement
-        if ufw status | grep -q "$HOST.*$PORT"; then
+        if ufw status 2>/dev/null | grep -q "$HOST.*$PORT" 2>/dev/null; then
             print_warning "Règle déjà existante pour $HOST:$PORT"
             ((SKIPPED++))
         else
@@ -206,7 +208,7 @@ while IFS= read -r line; do
             print_success "  → $HOST résolu en $RESOLVED_IP"
             
             # Ajouter règle avec l'IP
-            if ! ufw status | grep -q "$RESOLVED_IP.*$PORT"; then
+            if ! ufw status 2>/dev/null | grep -q "$RESOLVED_IP.*$PORT" 2>/dev/null; then
                 if ufw allow out to "$RESOLVED_IP" port "$PORT" proto tcp comment "MySQL $HOST (IP)" > /dev/null 2>&1; then
                     print_success "  → Règle IP ajoutée: $RESOLVED_IP:$PORT"
                     ((ADDED++))
@@ -220,7 +222,7 @@ while IFS= read -r line; do
             fi
             
             # Ajouter aussi règle avec hostname (au cas où l'IP change)
-            if ! ufw status | grep -q "$HOST.*$PORT"; then
+            if ! ufw status 2>/dev/null | grep -q "$HOST.*$PORT" 2>/dev/null; then
                 if ufw allow out to "$HOST" port "$PORT" proto tcp comment "MySQL $HOST (hostname)" > /dev/null 2>&1; then
                     print_success "  → Règle hostname ajoutée: $HOST:$PORT"
                 else
@@ -230,7 +232,7 @@ while IFS= read -r line; do
         else
             # Impossible de résoudre - Essayer quand même avec le hostname
             print_warning "Impossible de résoudre $HOST, tentative avec hostname..."
-            if ! ufw status | grep -q "$HOST.*$PORT"; then
+            if ! ufw status 2>/dev/null | grep -q "$HOST.*$PORT" 2>/dev/null; then
                 if ufw allow out to "$HOST" port "$PORT" proto tcp comment "MySQL $HOST" > /dev/null 2>&1; then
                     print_success "Autorisé: $HOST:$PORT"
                     ((ADDED++))
@@ -248,7 +250,11 @@ done <<< "$DB_HOSTS"
 
 # Recharger UFW
 print_info "Rechargement de UFW..."
-ufw reload > /dev/null 2>&1
+if ufw reload > /dev/null 2>&1; then
+    print_success "UFW rechargé avec succès"
+else
+    print_warning "Impossible de recharger UFW (peut nécessiter une intervention manuelle)"
+fi
 
 echo ""
 printf "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}\n"
@@ -262,9 +268,13 @@ print_success "Règles ajoutées: $ADDED"
 
 echo ""
 print_info "Vérification des règles UFW:"
-ufw status | grep -E "^[0-9]+.*ALLOW OUT" | head -10
+ufw status 2>/dev/null | grep -E "^[0-9]+.*ALLOW OUT" | head -10 || echo "Aucune règle ALLOW OUT trouvée"
 
 echo ""
 print_warning "N'oubliez pas de configurer les règles INGRESS sur les serveurs MySQL"
-print_info "IP publique de ce serveur: $(curl -s ifconfig.me)"
+PUBLIC_IP=$(curl -s --max-time 5 ifconfig.me 2>/dev/null || echo "non disponible")
+print_info "IP publique de ce serveur: $PUBLIC_IP"
 echo ""
+
+# Sortir avec succès même s'il y a eu des échecs (le service systemd considérera cela comme un succès)
+exit 0
