@@ -95,7 +95,8 @@ def require_auth(server_id=None, admin_required=False):
                 'username': payload['username'],
                 'avatar': payload.get('avatar'),
                 'discriminator': payload.get('discriminator', '0'),
-                'permissions': payload.get('server_permissions', {})
+                'permissions': payload.get('server_permissions', {}),
+                'access_token': payload.get('access_token')  # Token OAuth2 pour vérifications de rôles
             }
             # Ajouter l'URL de l'avatar
             request.user_data['avatar_url'] = get_discord_avatar_url(request.user_data)
@@ -595,12 +596,39 @@ def is_client_enabled():
     """Vérifie si le panel client est configuré"""
     return bool(CLIENT_DISCORD_GUILD_ID and CLIENT_DISCORD_ROLE_ID)
 
+def check_client_role_oauth(access_token):
+    """
+    Vérifie si un utilisateur a le rôle client via OAuth2 (sans bot).
+    Utilise l'endpoint /users/@me/guilds/{guild.id}/member
+    """
+    if not is_client_enabled():
+        debug_log("❌ Client panel non activé", reason="is_client_enabled=False")
+        return False
+    
+    if not access_token:
+        debug_log("❌ Pas d'access_token pour vérification OAuth2")
+        return False
+    
+    try:
+        roles = get_discord_member_roles_oauth(CLIENT_DISCORD_GUILD_ID, access_token)
+        if not roles:
+            debug_log("⚠️ Aucun rôle trouvé via OAuth2 pour le client")
+            return False
+        
+        has_role = str(CLIENT_DISCORD_ROLE_ID) in roles
+        debug_log(f"{'✅' if has_role else '❌'} Vérification rôle client (OAuth2)", has_role=has_role)
+        return has_role
+    except Exception as e:
+        debug_log("💥 Erreur vérification rôle client OAuth2", error=str(e), level="ERROR")
+        return False
+
 def check_client_role(user_id):
     """
     Vérifie si un utilisateur a le rôle client sur le serveur Discord configuré.
     Retourne True si l'utilisateur peut créer des serveurs.
+    Utilise le Bot Token (fallback si OAuth2 non disponible).
     """
-    debug_log("🔍 check_client_role appelé", user_id=user_id)
+    debug_log("🔍 check_client_role appelé (via Bot)", user_id=user_id)
     debug_log("🔍 Configuration Client Panel", 
               guild_id=CLIENT_DISCORD_GUILD_ID, 
               role_id=CLIENT_DISCORD_ROLE_ID,
@@ -611,7 +639,7 @@ def check_client_role(user_id):
         return False
     
     if not DISCORD_BOT_TOKEN:
-        debug_log("❌ DISCORD_BOT_TOKEN non configuré", level="WARNING")
+        debug_log("⚠️ DISCORD_BOT_TOKEN non configuré - utiliser OAuth2 à la place", level="WARNING")
         return False
     
     try:
@@ -674,16 +702,20 @@ def validate_discord_config():
     # redirect_uri
     if not REDIRECT_URI or not (REDIRECT_URI.startswith("http://") or REDIRECT_URI.startswith("https://")):
         issues.append("GLOBAL_REDIRECT_URI manquant ou invalide")
-    # bot token
-    if not DISCORD_BOT_TOKEN or DISCORD_BOT_TOKEN.count('.') != 2:
-        issues.append("DISCORD_BOT_TOKEN manquant ou invalide (format)" )
+    # bot token - OPTIONNEL maintenant (OAuth2 peut fonctionner sans)
+    if DISCORD_BOT_TOKEN:
+        if DISCORD_BOT_TOKEN.count('.') != 2:
+            issues.append("DISCORD_BOT_TOKEN invalide (format)" )
+        else:
+            decoded_id = _decode_id_from_token(DISCORD_BOT_TOKEN)
+            if decoded_id is None:
+                issues.append("DISCORD_BOT_TOKEN illisible (base64)")
+            elif DISCORD_CLIENT_ID and DISCORD_CLIENT_ID.isdigit():
+                if str(decoded_id) != str(DISCORD_CLIENT_ID):
+                    issues.append("Le BOT token n'appartient pas à l'application DISCORD_CLIENT_ID")
     else:
-        decoded_id = _decode_id_from_token(DISCORD_BOT_TOKEN)
-        if decoded_id is None:
-            issues.append("DISCORD_BOT_TOKEN illisible (base64)")
-        elif DISCORD_CLIENT_ID and DISCORD_CLIENT_ID.isdigit():
-            if str(decoded_id) != str(DISCORD_CLIENT_ID):
-                issues.append("Le BOT token n'appartient pas à l'application DISCORD_CLIENT_ID")
+        print("[INFO] DISCORD_BOT_TOKEN non configuré - le système fonctionnera uniquement via OAuth2")
+        print("[INFO] Les notifications Discord et certaines fonctionnalités avancées seront désactivées")
 
     if issues:
         print("[WARNING] Problèmes de configuration Discord:")
@@ -696,7 +728,7 @@ def validate_discord_config():
 # Cache pour les informations des guildes Discord
 
 # Fonctions utilitaires JWT
-def create_jwt_token(user_data, server_permissions):
+def create_jwt_token(user_data, server_permissions, access_token=None):
     """Crée un token JWT avec les données utilisateur et permissions"""
     now_utc = datetime.now(timezone.utc)
     payload = {
@@ -708,6 +740,9 @@ def create_jwt_token(user_data, server_permissions):
         'exp': now_utc + timedelta(hours=JWT_EXPIRATION_HOURS),
         'iat': now_utc
     }
+    # Stocker l'access token OAuth2 pour vérifier les rôles sans bot
+    if access_token:
+        payload['access_token'] = access_token
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def verify_jwt_token(token):
@@ -967,43 +1002,83 @@ async def check_discord_role_async(user_id, server_id, required_role='staff'):
         print(f"[ERROR] Erreur lors de la vérification du rôle Discord: {e}")
         return False
 
-def get_discord_member_roles(server_conf, user_id):
-    """Retourne la liste des rôles Discord (IDs) pour un utilisateur sur un serveur donné."""
+def get_discord_member_roles_oauth(guild_id, access_token):
+    """
+    Récupère les rôles d'un utilisateur via son access token OAuth2.
+    Utilise l'endpoint /users/@me/guilds/{guild.id}/member (scope guilds.members.read)
+    Ne nécessite PAS de bot sur le serveur Discord.
+    """
+    if not guild_id or not access_token:
+        return []
+    
+    try:
+        url = f"https://discord.com/api/users/@me/guilds/{guild_id}/member"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        res = requests.get(url, headers=headers, timeout=5)
+        
+        if res.status_code == 200:
+            member = res.json()
+            roles = [str(role_id) for role_id in member.get('roles', [])]
+            debug_log("✅ Rôles récupérés via OAuth2", guild_id=guild_id, roles_count=len(roles))
+            return roles
+        elif res.status_code == 404:
+            debug_log("⚠️ Utilisateur non membre du serveur Discord", guild_id=guild_id)
+            return []
+        else:
+            debug_log("⚠️ Erreur OAuth2 récupération rôles", status=res.status_code, guild_id=guild_id)
+            return []
+    except Exception as e:
+        debug_log("❌ Exception OAuth2 récupération rôles", error=str(e), level="ERROR")
+        return []
+
+
+def get_discord_member_roles(server_conf, user_id, access_token=None):
+    """
+    Retourne la liste des rôles Discord (IDs) pour un utilisateur sur un serveur donné.
+    Priorité : OAuth2 (access_token) > Bot Discord > API HTTP avec Bot Token
+    """
     if not server_conf:
         return []
     
     discord_config = server_conf.get('discord', {})
     guild_id = discord_config.get('guild_id')
     
-    if not guild_id or not DISCORD_BOT_TOKEN:
+    if not guild_id:
         return []
     
-    # Essayer via le bot Discord s'il est connecté
-    try:
-        if bot and bot.is_ready():
-            guild = bot.get_guild(int(guild_id))
-            if guild:
-                member = guild.get_member(int(user_id))
-                if member and getattr(member, 'roles', None):
-                    return [str(role.id) for role in member.roles if hasattr(role, 'id')]
-    except Exception as e:
-        print(f"[DEBUG] Erreur lors de la vérification des rôles via bot pour {guild_id}: {e}")
+    # PRIORITÉ 1: Utiliser l'access token OAuth2 de l'utilisateur (ne nécessite pas de bot)
+    if access_token:
+        roles = get_discord_member_roles_oauth(guild_id, access_token)
+        if roles:
+            return roles
     
-    # Fallback via l'API HTTP Discord
-    try:
-        url = f"https://discord.com/api/guilds/{guild_id}/members/{user_id}"
-        headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
-        res = requests.get(url, headers=headers, timeout=5)  # Réduit de 10 à 5 secondes
+    # PRIORITÉ 2: Essayer via le bot Discord s'il est connecté et configuré
+    if DISCORD_BOT_TOKEN:
+        try:
+            if bot and bot.is_ready():
+                guild = bot.get_guild(int(guild_id))
+                if guild:
+                    member = guild.get_member(int(user_id))
+                    if member and getattr(member, 'roles', None):
+                        return [str(role.id) for role in member.roles if hasattr(role, 'id')]
+        except Exception as e:
+            debug_log("⚠️ Erreur vérification rôles via bot", guild_id=guild_id, error=str(e))
         
-        if res.status_code == 200:
-            member = res.json()
-            return [str(role_id) for role_id in member.get('roles', [])]
-        elif res.status_code == 404:
-            return []
-        else:
-            print(f"[WARNING] Discord API a renvoyé {res.status_code} pour guild {guild_id} / user {user_id}")
-    except Exception as e:
-        print(f"[ERROR] Erreur lors de la récupération des rôles Discord via API: {e}")
+        # PRIORITÉ 3: Fallback via l'API HTTP Discord avec Bot Token
+        try:
+            url = f"https://discord.com/api/guilds/{guild_id}/members/{user_id}"
+            headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+            res = requests.get(url, headers=headers, timeout=5)
+            
+            if res.status_code == 200:
+                member = res.json()
+                return [str(role_id) for role_id in member.get('roles', [])]
+            elif res.status_code == 404:
+                return []
+            else:
+                debug_log("⚠️ Discord API (bot) erreur", status=res.status_code, guild_id=guild_id)
+        except Exception as e:
+            debug_log("❌ Erreur API Discord (bot)", error=str(e), level="ERROR")
     
     return []
 
@@ -1026,9 +1101,9 @@ def check_discord_role_sync(user_id, server_id, required_role='staff'):
         print(f"[ERROR] Erreur dans check_discord_role_sync: {e}")
         return False
 
-def get_user_server_permissions(user_id):
+def get_user_server_permissions(user_id, access_token=None):
     """Récupère les permissions de l'utilisateur pour tous les serveurs"""
-    debug_log("🔐 get_user_server_permissions appelé", user_id=user_id)
+    debug_log("🔐 get_user_server_permissions appelé", user_id=user_id, has_access_token=bool(access_token))
     
     permissions = {
         'accessible_servers': [],
@@ -1048,7 +1123,8 @@ def get_user_server_permissions(user_id):
         return permissions
     
     # Vérifier si l'utilisateur est un client (peut créer des serveurs)
-    is_client = check_client_role(user_id)
+    # Utiliser OAuth2 en priorité si access_token disponible
+    is_client = check_client_role_oauth(access_token) if access_token else check_client_role(user_id)
     if is_client:
         debug_log("🏪 Utilisateur identifié comme CLIENT", user_id=user_id)
         permissions['is_client'] = True
@@ -1076,7 +1152,8 @@ def get_user_server_permissions(user_id):
             permissions['admin_servers'].append(server_id)
             continue  # Pas besoin de vérifier les rôles, il est propriétaire
         
-        roles = get_discord_member_roles(server_conf, user_id)
+        # Utiliser OAuth2 en priorité pour récupérer les rôles
+        roles = get_discord_member_roles(server_conf, user_id, access_token)
         if not roles:
             debug_log("👥 Aucun rôle Discord trouvé", server_id=server_id, user_id=user_id)
             continue
@@ -2145,10 +2222,11 @@ def callback():
         user_id = user_data['id']
         
         # Récupérer les permissions de l'utilisateur pour tous les serveurs
-        server_permissions = get_user_server_permissions(user_id)
+        # En utilisant l'access_token OAuth2 pour vérifier les rôles (sans bot nécessaire)
+        server_permissions = get_user_server_permissions(user_id, access_token)
         
-        # Créer le token JWT
-        jwt_token = create_jwt_token(user_data, server_permissions)
+        # Créer le token JWT avec l'access_token pour les vérifications futures
+        jwt_token = create_jwt_token(user_data, server_permissions, access_token)
         
         # Déterminer la redirection
         if state != 'general' and server_config.is_valid_server(state):

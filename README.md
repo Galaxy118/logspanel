@@ -12,9 +12,10 @@ Panel de gestion des logs multi-serveurs pour FiveM avec authentification Discor
 
 ### 🔐 Authentification & Autorisations
 - **Discord OAuth2** - Connexion via Discord
-- **Gestion des rôles** - Permissions basées sur les rôles Discord
+- **Gestion des rôles sans bot** - Vérification des rôles Discord via OAuth2 (scope `guilds.members.read`)
 - **Panel Client** - Les clients peuvent créer et gérer leur propre serveur
 - **Super Admin** - Accès complet à tous les serveurs
+- **Bot Discord optionnel** - Fonctionne sans ajouter de bot aux serveurs Discord
 
 ### 📊 Gestion des Logs
 - **Multi-serveurs** - Gérez plusieurs serveurs FiveM depuis une seule interface

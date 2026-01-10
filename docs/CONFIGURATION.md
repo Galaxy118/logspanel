@@ -53,7 +53,12 @@ openssl rand -hex 32
 # Application Discord - https://discord.com/developers/applications
 DISCORD_CLIENT_ID=votre_application_id
 DISCORD_CLIENT_SECRET=votre_client_secret
-DISCORD_BOT_TOKEN=votre_bot_token
+
+# Token du bot Discord (OPTIONNEL)
+# Le système fonctionne SANS bot grâce à OAuth2 avec le scope guilds.members.read
+# Si configuré : notifications Discord + vérification rôles plus rapide
+# Si non configuré : système plus simple, pas besoin d'ajouter un bot aux serveurs
+DISCORD_BOT_TOKEN=
 
 # URL de redirection après connexion
 GLOBAL_REDIRECT_URI=https://votre-domaine.com/callback
@@ -67,10 +72,14 @@ GLOBAL_REDIRECT_URI=https://votre-domaine.com/callback
    - Copier **Client ID**
    - Copier **Client Secret**
    - Ajouter Redirect : `https://votre-domaine.com/callback`
-4. Onglet **Bot** :
+   - **IMPORTANT** : Les scopes requis sont `identify`, `guilds` et `guilds.members.read`
+4. Onglet **Bot** (OPTIONNEL - pour notifications Discord) :
    - Créer un bot
    - Activer **Server Members Intent**
    - Copier le **Token**
+   - Ajouter le bot aux serveurs Discord où vous voulez des notifications
+
+> **💡 Mode simplifié (sans bot)** : Si vous ne configurez pas `DISCORD_BOT_TOKEN`, le système utilisera uniquement OAuth2. Les utilisateurs n'auront pas besoin d'ajouter de bot à leurs serveurs Discord. La vérification des rôles se fera via leur connexion Discord.
 
 #### 3. Super Administrateurs
 
