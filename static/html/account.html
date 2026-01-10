@@ -225,42 +225,55 @@
     {% if is_client and not client_server %}
     <script>
     // Gestion du formulaire de création de serveur client
-    document.getElementById('clientCreateServerForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
+    (function() {
+        const form = document.getElementById('clientCreateServerForm');
+        if (!form || form.dataset.handlerAttached) return;
         
-        const form = e.target;
-        const submitBtn = form.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
+        // Marquer le formulaire pour éviter les attachements multiples
+        form.dataset.handlerAttached = 'true';
         
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Création en cours...';
-        
-        try {
-            const formData = new FormData(form);
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
             
-            const response = await fetch('/admin/servers/create', {
-                method: 'POST',
-                body: formData
-            });
+            const submitBtn = form.querySelector('button[type="submit"]');
             
-            const data = await response.json();
+            // Éviter les doubles soumissions
+            if (submitBtn.disabled) {
+                return;
+            }
             
-            if (data.success) {
-                // Afficher un message de succès
-                await showSuccess('Serveur créé avec succès ! La page va se recharger.', '✅ Création réussie');
-                window.location.reload();
-            } else {
-                await showError(data.error || 'Une erreur est survenue', '❌ Erreur de création');
+            const originalText = submitBtn.innerHTML;
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Création en cours...';
+            
+            try {
+                const formData = new FormData(form);
+                
+                const response = await fetch('/admin/servers/create', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Afficher un message de succès
+                    await showSuccess('Serveur créé avec succès ! La page va se recharger.', '✅ Création réussie');
+                    window.location.reload();
+                } else {
+                    await showError(data.error || 'Une erreur est survenue', '❌ Erreur de création');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                await showError('Erreur de connexion. Veuillez réessayer.', '❌ Erreur réseau');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
             }
-        } catch (error) {
-            console.error('Erreur:', error);
-            await showError('Erreur de connexion. Veuillez réessayer.', '❌ Erreur réseau');
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalText;
-        }
-    });
+        }, { once: true });
+    })();
     </script>
     {% endif %}
     
