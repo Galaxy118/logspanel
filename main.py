@@ -1341,11 +1341,14 @@ def add_log(server_id=None):
                 continue
             log_type = sanitize_string(log_type, MAX_LOG_TYPE_LENGTH)
             
-            # Construire JSON data
+            # Construire JSON data (supporte à la fois 'message' et 'logs_message')
+            log_message = log_item.get('message') or log_item.get('logs_message', '')
+            log_title = log_item.get('title') or log_item.get('logs_title', 'Logs')
+            
             log_payload = {
-                "logs_message": sanitize_string(log_item.get('message', ''), MAX_LOG_MESSAGE_LENGTH),
+                "logs_message": sanitize_string(log_message, MAX_LOG_MESSAGE_LENGTH),
                 "name": sanitize_string(log_item.get('name', ''), MAX_LOG_NAME_LENGTH),
-                "logs_title": sanitize_string(log_item.get('title', 'Logs'), MAX_LOG_TITLE_LENGTH),
+                "logs_title": sanitize_string(log_title, MAX_LOG_TITLE_LENGTH),
                 "idunique": sanitize_string(log_item.get('idunique'), MAX_IDUNIQUE_LENGTH) if log_item.get('idunique') else None
             }
             
