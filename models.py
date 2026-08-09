@@ -118,12 +118,11 @@ class ServerConfig:
                 
                 file_path = self.config_file if os.path.isabs(self.config_file) else os.path.join('/var/www/logspanel', self.config_file)
                 
-                # Écriture atomique via fichier temporaire
-                temp_file = file_path + '.tmp'
-                with open(temp_file, 'w', encoding='utf-8') as f:
-                    json.dump(self._config, f, indent=2, ensure_ascii=False)
+                # Écriture directe (évite les erreurs de création de .tmp avec systemd ProtectSystem=strict)
+                config_json = json.dumps(self._config, indent=2, ensure_ascii=False)
                 
-                os.replace(temp_file, file_path)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(config_json)
                 
                 logger.info(f"✅ Configuration sauvegardée avec succès: {file_path}")
                 return
