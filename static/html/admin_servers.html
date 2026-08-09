@@ -89,17 +89,7 @@
                                     {{ server.description or 'Aucune description' }}
                                 </p>
                                 
-                                <div class="mb-2">
-                                    <small class="text-muted">
-                                        <i class="fas fa-database me-1"></i>
-                                        Base de données: 
-                                        {% if server.database_uri %}
-                                            <span class="text-success">Configurée</span>
-                                        {% else %}
-                                            <span class="text-danger">Non configurée</span>
-                                        {% endif %}
-                                    </small>
-                                    <br>
+
                                     <small class="text-muted">
                                         <i class="fab fa-discord me-1"></i>
                                         Discord: 
@@ -195,14 +185,7 @@
                                 <textarea class="form-control" id="description" name="description" rows="2"
                                           placeholder="Description du serveur"></textarea>
                             </div>
-                            <div class="mb-3">
-                                <label for="database_uri" class="form-label">
-                                    <i class="fas fa-database me-1"></i>
-                                    URI de la base de données
-                                </label>
-                                <input type="text" class="form-control" id="database_uri" name="database_uri"
-                                       placeholder="mysql://user:password@host:port/database">
-                            </div>
+
                             <div class="mb-3">
                                 <label for="owner_id" class="form-label">
                                     <i class="fas fa-user-tag me-1"></i>

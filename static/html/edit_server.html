@@ -67,12 +67,7 @@
                                 <option value="maintenance" {% if server.status == 'maintenance' %}selected{% endif %}>Maintenance</option>
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="database_uri" class="form-label">URI Base de données</label>
-                            <input type="text" class="form-control" id="database_uri" name="database_uri" 
-                                   value="{{ server.database_uri }}">
-                            <div class="form-text">Connexion à la base de données MySQL</div>
-                        </div>
+
                     </div>
                 </div>
 

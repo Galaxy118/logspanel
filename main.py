@@ -2624,7 +2624,6 @@ def edit_server(server_id):
                 'display_name': request.form.get('display_name'),
                 'description': request.form.get('description'),
                 'status': request.form.get('status'),
-                'database_uri': request.form.get('database_uri'),
                 'discord': {
                     'guild_id': request.form.get('discord_guild_id'),
                     'role_id_staff': request.form.get('discord_role_staff'),
@@ -2645,9 +2644,8 @@ def edit_server(server_id):
             # Invalider les caches pour ce serveur
             invalidate_all_server_caches(server_id)
             
-            # Synchroniser les règles firewall automatiquement (si database_uri a changé)
-            if old_config and old_config.get('database_uri') != config_data.get('database_uri'):
-                sync_firewall_rules()
+            # Synchroniser les règles firewall (IP du VPS)
+            sync_firewall_rules()
             
             # Envoyer un log dans le salon général Discord
             username = request.user_data.get('username', 'Inconnu')
@@ -2816,16 +2814,14 @@ def create_server():
         server_id = request.form.get('server_id', '').strip()
         display_name = request.form.get('display_name', '').strip()
         description = request.form.get('description', '').strip()
-        database_uri = request.form.get('database_uri', '').strip()
         
         debug_log("📋 Données du formulaire récupérées", 
                  server_id=server_id,
-                 display_name=display_name,
-                 has_db_uri=bool(database_uri))
+                 display_name=display_name)
         
-        if not server_id or not display_name or not database_uri:
+        if not server_id or not display_name:
             debug_log("❌ Champs requis manquants", level="WARNING")
-            return jsonify({'error': 'Les champs server_id, display_name et database_uri sont requis'}), 400
+            return jsonify({'error': 'Les champs server_id et display_name sont requis'}), 400
         
         # Vérifier que le serveur n'existe pas déjà
         if server_config.is_valid_server(server_id):
@@ -2837,7 +2833,6 @@ def create_server():
             'name': server_id,
             'display_name': display_name,
             'description': description,
-            'database_uri': database_uri,
             'discord': {
                 'guild_id': request.form.get('discord_guild_id', '').strip(),
                 'role_id_staff': request.form.get('discord_role_staff', '').strip(),
