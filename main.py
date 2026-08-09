@@ -49,7 +49,7 @@ from discord.errors import LoginFailure
 import jinja2
 from jinja2 import TemplateNotFound
 
-from models import db, Log, check_db_connection, server_config, check_server_db_status, status_cache, log_types_cache, log_stats_cache, server_config_cache, admin_role_cache, get_server_logs, get_server_database_session, get_log_type_counts, log_counts_cache, migrate_config_to_db
+from models import db, ServerLogModel, check_db_connection, server_config, check_server_db_status, status_cache, log_types_cache, log_stats_cache, server_config_cache, admin_role_cache, get_server_logs, get_log_type_counts, log_counts_cache, migrate_config_to_db
 
 # Décorateur pour protéger les routes avec JWT
 def require_auth(server_id=None, admin_required=False):
@@ -1467,97 +1467,92 @@ def sanitize_string(value, max_length, default=''):
 @rate_limit("100 per minute")
 def add_log(server_id=None):
     token = request.headers.get('Authorization')
-    
-    # Si aucun server_id dans l'URL, essayer de le récupérer depuis les données
+    if token and token.startswith('Bearer '):
+        token = token[7:]
+        
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Missing JSON body"}), 400
+        
+    # Accepter soit un objet unique, soit une liste
+    is_batch = isinstance(data, list)
+    logs_data = data if is_batch else [data]
     
-    # SÉCURITÉ: Valider le server_id
+    if not logs_data:
+        return jsonify({"error": "Empty payload"}), 400
+        
+    # Si server_id non fourni dans l'URL, le prendre du premier log (rétrocompatibilité)
     if not server_id:
-        server_id = data.get('server_id', 'default')
-    
-    # Validation stricte du server_id (alphanumeric + underscore seulement)
+        server_id = logs_data[0].get('server_id')
+        
     if not server_id or not re.match(r'^[a-zA-Z0-9_-]+$', server_id):
         return jsonify({"error": "Invalid server_id format"}), 400
-    
-    if not server_config.is_valid_server(server_id):
+        
+    server_conf = server_config.get_server(server_id)
+    if not server_conf:
         return jsonify({"error": "Unknown server"}), 400
-    
-    # Vérifier le token pour ce serveur
-    api_conf = get_api_config(server_id)
-    valid_tokens = api_conf.get('tokens', [])
-    
-    # SÉCURITÉ: Comparaison en temps constant pour éviter les attaques timing
-    token_valid = False
-    for valid_token in valid_tokens:
-        if secrets.compare_digest(str(token or ''), str(valid_token)):
-            token_valid = True
-            break
-    
-    if not token_valid:
+        
+    # Vérification du token
+    valid_token = server_conf.get('api_token')
+    if not valid_token or not secrets.compare_digest(str(token or ''), str(valid_token)):
         return jsonify({"error": "Invalid token"}), 401
-
-    # Utiliser la session de base de données spécifique au serveur
-    session = None
+        
+    inserted_ids = []
+    
     try:
-        # SÉCURITÉ: Extraire et valider le type
-        log_type = data.get('type')
-        if not log_type:
-            return jsonify({"error": "Missing 'type' field"}), 400
-        log_type = sanitize_string(log_type, MAX_LOG_TYPE_LENGTH)
+        for log_item in logs_data:
+            log_type = log_item.get('type')
+            if not log_type:
+                continue
+            log_type = sanitize_string(log_type, MAX_LOG_TYPE_LENGTH)
+            
+            # Construire JSON data
+            log_payload = {
+                "logs_message": sanitize_string(log_item.get('message', ''), MAX_LOG_MESSAGE_LENGTH),
+                "name": sanitize_string(log_item.get('name', ''), MAX_LOG_NAME_LENGTH),
+                "logs_title": sanitize_string(log_item.get('title', 'Logs'), MAX_LOG_TITLE_LENGTH),
+                "idunique": sanitize_string(log_item.get('idunique'), MAX_IDUNIQUE_LENGTH) if log_item.get('idunique') else None
+            }
+            
+            if 'name_cible' in log_item:
+                log_payload['name_cible'] = sanitize_string(log_item['name_cible'], MAX_LOG_NAME_LENGTH)
+            if 'idunique_cible' in log_item:
+                log_payload['idunique_cible'] = sanitize_string(log_item['idunique_cible'], MAX_IDUNIQUE_LENGTH)
+                
+            log_date = datetime.now()
+            if log_item.get('date'):
+                try:
+                    log_date = datetime.strptime(str(log_item.get('date'))[:19], "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    pass
+                    
+            new_log = ServerLogModel(
+                server_id=server_id,
+                type=log_type,
+                data=json.dumps(log_payload, ensure_ascii=False),
+                date=log_date
+            )
+            db.session.add(new_log)
+            # Flush pour avoir l'ID
+            db.session.flush()
+            inserted_ids.append(new_log.id)
+            
+        db.session.commit()
         
-        # SÉCURITÉ: Préparer les données JSON avec sanitisation
-        log_data = {
-            "logs_message": sanitize_string(data.get('message'), MAX_LOG_MESSAGE_LENGTH),
-            "name": sanitize_string(data.get('name'), MAX_LOG_NAME_LENGTH),
-            "logs_title": sanitize_string(data.get('title', 'Logs'), MAX_LOG_TITLE_LENGTH),
-            "idunique": sanitize_string(data.get('idunique'), MAX_IDUNIQUE_LENGTH) if data.get('idunique') else None
-        }
-        
-        # Ajouter des champs spécifiques selon le type (avec sanitisation)
-        if 'name_cible' in data:
-            log_data['name_cible'] = sanitize_string(data['name_cible'], MAX_LOG_NAME_LENGTH)
-        if 'idunique_cible' in data:
-            log_data['idunique_cible'] = sanitize_string(data['idunique_cible'], MAX_IDUNIQUE_LENGTH)
-        
-        # Valider et parser la date
-        log_date = datetime.now()
-        if data.get('date'):
-            try:
-                log_date = datetime.strptime(str(data.get('date'))[:19], "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                pass  # Utiliser la date actuelle si format invalide
-        
-        # Créer le log
-        log = Log(
-            type=log_type,
-            data=json.dumps(log_data, ensure_ascii=False),
-            date=log_date
-        )
-        
-        # Obtenir la session de base de données spécifique au serveur
-        session = get_server_database_session(server_id)
-        session.add(log)
-        session.commit()
-        
-        # Récupérer l'ID du log avant de fermer la session
-        log_id = log.id
-        
-        # Invalider les caches pour ce serveur
+        # Invalider caches
         log_types_cache.invalidate(server_id)
         log_stats_cache.invalidate(server_id)
         log_counts_cache.invalidate(server_id)
         
-        return jsonify({"success": True, "id": log_id, "server": server_id}), 201
+        if is_batch:
+            return jsonify({"success": True, "inserted": len(inserted_ids), "server": server_id}), 201
+        else:
+            return jsonify({"success": True, "id": inserted_ids[0] if inserted_ids else None, "server": server_id}), 201
+            
     except Exception as e:
         app.logger.error(f"Erreur ajout log {server_id}: {type(e).__name__}")
-        if session:
-            session.rollback()
+        db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
-    finally:
-        if session:
-            session.close()
 
 
 @app.after_request

@@ -90,21 +90,40 @@ class ServerConfig:
         """Retourne la liste des IDs de serveurs"""
         servers = db.session.query(ServerConfigModel.id).all()
         return [s.id for s in servers]
-    
+        """Retourne une liste simplifiée des serveurs (ID, Nom, Description, Propriétaire)"""
+        servers = self.get_servers()
+        return [{
+            'id': sid, 
+            'name': conf.get('display_name', sid), 
+            'description': conf.get('description', ''),
+            'owner_id': conf.get('owner_id', '')
+        } for sid, conf in servers.items()]
+        
     def get_global_config(self):
         """Retourne la configuration globale"""
         global_config = GlobalConfigModel.query.get('global')
         if global_config:
             return parse_json_fast(global_config.config_data)
         return {}
+        
+    def update_global_config(self, data):
+        """Met à jour la configuration globale"""
+        global_config = GlobalConfigModel.query.get('global')
+        if global_config:
+            global_config.config_data = json.dumps(data, ensure_ascii=False)
+        else:
+            global_config = GlobalConfigModel(id='global', config_data=json.dumps(data, ensure_ascii=False))
+            db.session.add(global_config)
+        db.session.commit()
+        return True
+    
+    def load_config(self):
+        """Obsolète : la configuration est gérée dynamiquement par la base de données SQLite."""
+        pass
     
     def save_config(self):
         """Obsolète : La sauvegarde est effectuée par db.session.commit() directement"""
         pass
-    
-    def get_all_servers(self):
-        """Retourne tous les serveurs avec leurs configurations"""
-        return self.get_servers()
     
     def update_server_config(self, server_id, config_data):
         """Met à jour la configuration d'un serveur"""
@@ -123,6 +142,8 @@ class ServerConfig:
         """Supprime un serveur de la configuration"""
         server = ServerConfigModel.query.get(server_id)
         if server:
+            # Supprimer aussi les logs associés
+            ServerLogModel.query.filter_by(server_id=server_id).delete()
             db.session.delete(server)
             db.session.commit()
             return True
@@ -130,6 +151,7 @@ class ServerConfig:
     
     def create_server(self, server_id, config_data):
         """Crée un nouveau serveur avec sa configuration"""
+        import secrets
         if self.is_valid_server(server_id):
             raise ValueError(f"Le serveur {server_id} existe déjà")
         
@@ -138,7 +160,7 @@ class ServerConfig:
             'description': config_data.get('description', ''),
             'logo': config_data.get('logo', f'/static/logos/{server_id}.png'),
             'status': 'offline',
-            'database_uri': config_data.get('database_uri', ''),
+            'api_token': secrets.token_urlsafe(32), # Jeton API généré
             'owner_id': config_data.get('owner_id', ''),
             'discord': {
                 'client_id': config_data.get('discord', {}).get('client_id', ''),
@@ -148,23 +170,21 @@ class ServerConfig:
                 'role_id_client': config_data.get('discord', {}).get('role_id_client', ''),
                 'role_id_staff': config_data.get('discord', {}).get('role_id_staff', ''),
                 'role_id_admin': config_data.get('discord', {}).get('role_id_admin', ''),
-                'channel_id': config_data.get('discord', {}).get('channel_id', '')
-            },
-            'api': {
-                'tokens': config_data.get('api', {}).get('tokens', []),
-                'allowed_ips': config_data.get('api', {}).get('allowed_ips', ['127.0.0.1'])
-            },
-            'db_accessible': False
+            }
         }
         
-        new_server = ServerConfigModel(id=server_id, config_data=json.dumps(default_config, ensure_ascii=False))
-        db.session.add(new_server)
+        server = ServerConfigModel(id=server_id, config_data=json.dumps(default_config, ensure_ascii=False))
+        db.session.add(server)
         db.session.commit()
         
-        return server_id
+        return True
+
+# Instance globale
+server_config = ServerConfig()
 
 def migrate_config_to_db(app):
     """Fonction de migration à exécuter une fois au démarrage"""
+    import secrets
     with app.app_context():
         # S'assurer que le dossier instance existe
         os.makedirs(app.instance_path, exist_ok=True)
@@ -185,379 +205,198 @@ def migrate_config_to_db(app):
             if ServerConfigModel.query.first() is not None or GlobalConfigModel.query.first() is not None:
                 return
                 
-            logger.info("📦 Migration de servers_config.json vers la base de données SQLite...")
-            
-            # Migrer global
-            global_conf = old_config.get('global', {})
-            db.session.add(GlobalConfigModel(id='global', config_data=json.dumps(global_conf, ensure_ascii=False)))
-            
-            # Migrer les serveurs
-            servers = old_config.get('servers', {})
-            for server_id, server_data in servers.items():
-                db.session.add(ServerConfigModel(id=server_id, config_data=json.dumps(server_data, ensure_ascii=False)))
+            # Migrer global_config
+            if 'global_config' in old_config:
+                global_data = old_config['global_config']
+                global_model = GlobalConfigModel(id='global', config_data=json.dumps(global_data, ensure_ascii=False))
+                db.session.add(global_model)
                 
+            # Migrer servers
+            if 'servers' in old_config:
+                for server_id, server_data in old_config['servers'].items():
+                    # Ajouter l'api_token si manquant
+                    if 'api_token' not in server_data:
+                        server_data['api_token'] = secrets.token_urlsafe(32)
+                    
+                    server_model = ServerConfigModel(id=server_id, config_data=json.dumps(server_data, ensure_ascii=False))
+                    db.session.add(server_model)
+                    
             db.session.commit()
-            logger.info("✅ Migration terminée avec succès. Vous pouvez supprimer servers_config.json en toute sécurité.")
+            print("✅ Migration de la configuration vers SQLite terminée.")
             
     except Exception as e:
         logger.error(f"❌ Erreur lors de la migration: {e}")
 
+# =====================================================================
+# Système de Cache Optimisé
+# =====================================================================
 class SimpleCache:
-    def __init__(self, ttl=300):
+    def __init__(self, ttl=60):
         self.cache = {}
         self.ttl = ttl
-    
-    def get(self, key):
-        if key in self.cache:
-            timestamp, value = self.cache[key]
-            if time.time() - timestamp < self.ttl:
-                return value
-            else:
-                # Cache expiré, supprimer l'entrée
-                del self.cache[key]
+        self.lock = threading.Lock()
+        
+    def get(self, key, *args):
+        """Récupère une valeur du cache si elle n'a pas expiré"""
+        if args:
+            import hashlib
+            args_str = json.dumps(args, sort_keys=True)
+            key = f"{key}_{hashlib.md5(args_str.encode()).hexdigest()}"
+            
+        with self.lock:
+            if key in self.cache:
+                timestamp, data = self.cache[key]
+                if time.time() - timestamp < self.ttl:
+                    return data
+                else:
+                    del self.cache[key]
         return None
-    
-    def set(self, key, value):
-        """Met à jour le cache avec une nouvelle valeur"""
-        self.cache[key] = (time.time(), value)
-    
-    def invalidate(self, key=None):
-        """Invalide le cache pour une clé spécifique ou tout"""
-        if key:
-            self.cache.pop(key, None)
-        else:
-            self.cache.clear()
+        
+    def set(self, key, data, *args):
+        """Stocke une valeur dans le cache"""
+        if args:
+            import hashlib
+            args_str = json.dumps(args, sort_keys=True)
+            key = f"{key}_{hashlib.md5(args_str.encode()).hexdigest()}"
+            
+        with self.lock:
+            self.cache[key] = (time.time(), data)
+            
+    def invalidate(self, prefix=None):
+        """Invalide tout le cache ou les clés avec un préfixe donné"""
+        with self.lock:
+            if prefix:
+                keys_to_remove = [k for k in self.cache.keys() if k.startswith(prefix)]
+                for key in keys_to_remove:
+                    del self.cache[key]
+            else:
+                self.cache.clear()
     
     def cleanup_expired(self):
         """Nettoie les entrées expirées du cache"""
         current_time = time.time()
-        expired_keys = [
-            key for key, (timestamp, _) in self.cache.items()
-            if current_time - timestamp >= self.ttl
-        ]
-        for key in expired_keys:
-            del self.cache[key]
-
-
-class ServerCache:
-    def __init__(self, ttl=300):
-        self.cache = {}
-        self.ttl = ttl
-    
-    def get(self, server_id, filters=None):
-        cache_key = self._get_cache_key(server_id, filters)
-        if cache_key in self.cache:
-            timestamp, value = self.cache[cache_key]
-            if time.time() - timestamp < self.ttl:
-                return value
-            else:
-                del self.cache[cache_key]
-        return None
-    
-    def set(self, server_id, value, filters=None):
-        cache_key = self._get_cache_key(server_id, filters)
-        self.cache[cache_key] = (time.time(), value)
-    
-    def _get_cache_key(self, server_id, filters):
-        if filters:
-            filter_str = '_'.join([f"{k}:{v}" for k, v in sorted(filters.items()) if v])
-            return f"{server_id}_{filter_str}"
-        return server_id
-    
-    def invalidate(self, server_id=None):
-        if server_id:
-            keys_to_remove = [key for key in self.cache.keys() if key.startswith(f"{server_id}_")]
-            for key in keys_to_remove:
+        with self.lock:
+            expired_keys = [
+                key for key, (timestamp, _) in self.cache.items()
+                if current_time - timestamp >= self.ttl
+            ]
+            for key in expired_keys:
                 del self.cache[key]
-        else:
-            self.cache.clear()
-    
-    def cleanup_expired(self):
-        """Nettoie les entrées expirées du cache"""
-        current_time = time.time()
-        expired_keys = [
-            key for key, (timestamp, _) in self.cache.items()
-            if current_time - timestamp >= self.ttl
-        ]
-        for key in expired_keys:
-            del self.cache[key]
 
+# Instanciation des caches
+status_cache = SimpleCache(ttl=15)
+log_types_cache = SimpleCache(ttl=300)
+log_stats_cache = SimpleCache(ttl=30)
+server_config_cache = SimpleCache(ttl=300)
+admin_role_cache = SimpleCache(ttl=300)
+log_counts_cache = SimpleCache(ttl=60)
 
-def _normalize_db_uri(database_uri: str) -> str:
-    """Normalise l'URI MySQL pour des drivers plus performants et compatibles."""
-    if not database_uri:
-        return database_uri
-    # Essayez en priorité PyMySQL (souvent plus rapide que mysqlconnector sur Windows)
-    if database_uri.startswith('mysql://'):
-        return database_uri.replace('mysql://', 'mysql+pymysql://', 1)
-    if database_uri.startswith('mariadb://'):
-        return database_uri.replace('mariadb://', 'mysql+pymysql://', 1)
-    return database_uri
-
-def invalidate_server_db_cache(server_id: str):
-    """Invalide le cache de connexion pour un serveur spécifique"""
-    with _db_lock:
-        # Fermer les connexions existantes si elles existent
-        if server_id in server_db_connections:
-            try:
-                server_db_connections[server_id].dispose()
-            except Exception:
-                pass
-            del server_db_connections[server_id]
-        if server_id in server_db_sessions:
-            del server_db_sessions[server_id]
-        if server_id in server_db_uris:
-            del server_db_uris[server_id]
-        # Nettoyer aussi les variantes avec __mysqlconnector
-        mysqlconnector_key = server_id + "__mysqlconnector"
-        if mysqlconnector_key in server_db_connections:
-            try:
-                server_db_connections[mysqlconnector_key].dispose()
-            except Exception:
-                pass
-            del server_db_connections[mysqlconnector_key]
-        if mysqlconnector_key in server_db_sessions:
-            del server_db_sessions[mysqlconnector_key]
-
-def _get_or_create_engine_and_sessionmaker(server_id: str, database_uri: str):
-    """Récupère un engine et un sessionmaker mis en cache par serveur."""
-    # Vérifier si l'URI a changé et invalider le cache si nécessaire
-    if server_id in server_db_uris and server_db_uris[server_id] != database_uri:
-        print(f"[DEBUG] URI de base de données changée pour {server_id}, invalidation du cache")
-        invalidate_server_db_cache(server_id)
-    
-    # Double-checked locking
-    if server_id in server_db_connections and server_id in server_db_sessions:
-        return server_db_connections[server_id], server_db_sessions[server_id]
-    with _db_lock:
-        if server_id in server_db_connections and server_id in server_db_sessions:
-            return server_db_connections[server_id], server_db_sessions[server_id]
-        # Créer l'engine avec un pooling optimisé pour haute performance
-        engine = create_engine(
-            database_uri,
-            pool_size=20,  # Augmenté pour supporter plus de connexions simultanées
-            max_overflow=40,  # Augmenté pour les pics de charge
-            pool_timeout=5,  # Réduit de 10 à 5 secondes
-            pool_recycle=1800,
-            pool_pre_ping=True,  # Vérifie les connexions avant utilisation
-            echo=False,  # Désactiver les logs SQL en production
-            connect_args={
-                'connect_timeout': 3,  # Réduit de 10 à 3 secondes pour réponse rapide
-                'charset': 'utf8mb4',
-                'use_unicode': True
-            } if database_uri.startswith('mysql') else {}
-        )
-        SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-        server_db_connections[server_id] = engine
-        server_db_sessions[server_id] = SessionLocal
-        server_db_uris[server_id] = database_uri  # Stocker l'URI utilisée
-        return engine, SessionLocal
-
-def get_server_database_session(server_id):
-    """Obtient une session de base de données pour un serveur spécifique avec pooling et cache."""
-    # Récupérer la configuration du serveur
-    server_conf = server_config.get_server(server_id)
-    if not server_conf:
-        raise ValueError(f"Serveur {server_id} non trouvé")
-
-    database_uri = server_conf.get('database_uri')
-    if not database_uri:
-        raise ValueError(f"URI de base de données non configurée pour le serveur {server_id}")
-
-    database_uri = _normalize_db_uri(database_uri)
-
-    try:
-        engine, SessionLocal = _get_or_create_engine_and_sessionmaker(server_id, database_uri)
-        session = SessionLocal()
-        # Ping rapide
-        session.execute(text('SELECT 1'))
-        return session
-    except Exception as e:
-        # Fallback: essayer mysqlconnector si PyMySQL échoue
-        if database_uri.startswith('mysql+pymysql://'):
-            try:
-                alt_uri = database_uri.replace('mysql+pymysql://', 'mysql+mysqlconnector://', 1)
-                engine, SessionLocal = _get_or_create_engine_and_sessionmaker(server_id + "__mysqlconnector", alt_uri)
-                session = SessionLocal()
-                session.execute(text('SELECT 1'))
-                # Miroir sous la clé canonique pour les prochains appels
-                with _db_lock:
-                    server_db_connections[server_id] = server_db_connections.get(server_id + "__mysqlconnector", engine)
-                    server_db_sessions[server_id] = server_db_sessions.get(server_id + "__mysqlconnector", SessionLocal)
-                return session
-            except Exception:
-                pass
-        # Si c'est une erreur d'authentification, invalider le cache
-        error_str = str(e).lower()
-        if 'access denied' in error_str or 'authentication' in error_str or '1045' in error_str:
-            print(f"[DEBUG] Erreur d'authentification détectée dans get_server_database_session, invalidation du cache pour {server_id}")
-            invalidate_server_db_cache(server_id)
-        print(f"[ERROR] Impossible de se connecter à la base de données du serveur {server_id}: {e}")
-        raise
-
+def check_db_connection():
+    """Obsolète : ne fait rien. La vérification SQLite se fait automatiquement."""
+    pass
 
 def _sanitize_like_input(value):
     """
     Échappe les caractères spéciaux SQL LIKE pour prévenir les injections.
-    SÉCURITÉ: Cette fonction est critique pour la prévention des injections SQL.
     """
     if not value:
         return ''
-    # Échapper les caractères spéciaux LIKE: %, _, \
     value = str(value)
     value = value.replace('\\', '\\\\')
     value = value.replace('%', '\\%')
     value = value.replace('_', '\\_')
-    # Limiter la longueur pour prévenir les attaques par déni de service
     return value[:500]
 
-def _apply_filters(session, query, filters):
+def _apply_filters(query, filters):
     """
-    Applique les filtres avec optimisation JSON_EXTRACT si disponible.
-    SÉCURITÉ: Tous les filtres sont sanitisés pour prévenir les injections SQL.
+    Applique les filtres sur la requête ServerLogModel.
     """
     if not filters:
         return query
-    dialect = session.get_bind().dialect.name if session is not None else 'default'
-    use_json_extract = dialect in ('mysql', 'mariadb')
 
-    # SÉCURITÉ: Sanitiser tous les inputs avant utilisation dans les requêtes
     if filters.get('name'):
         safe_name = _sanitize_like_input(filters['name'])
-        if use_json_extract:
-            query = query.filter(func.json_extract(Log.data, '$.name').like(f"%{safe_name}%", escape='\\'))
-        else:
-            query = query.filter(Log.data.like(f'%"name":"%{safe_name}%"%', escape='\\'))
+        query = query.filter(ServerLogModel.data.like(f'%"name":"%{safe_name}%"%', escape='\\'))
     
     if filters.get('idunique'):
         safe_idunique = _sanitize_like_input(filters['idunique'])
-        if use_json_extract:
-            query = query.filter(func.json_extract(Log.data, '$.idunique').like(f"%{safe_idunique}%", escape='\\'))
-        else:
-            query = query.filter(Log.data.like(f'%"idunique":%{safe_idunique}%', escape='\\'))
+        query = query.filter(ServerLogModel.data.like(f'%"idunique":%{safe_idunique}%', escape='\\'))
     
     if filters.get('message'):
         safe_message = _sanitize_like_input(filters['message'])
-        if use_json_extract:
-            query = query.filter(func.json_extract(Log.data, '$.logs_message').like(f"%{safe_message}%", escape='\\'))
-        else:
-            query = query.filter(Log.data.like(f'%"logs_message":"%{safe_message}%"%', escape='\\'))
+        query = query.filter(ServerLogModel.data.like(f'%"logs_message":"%{safe_message}%"%', escape='\\'))
     
     if filters.get('title'):
         safe_title = _sanitize_like_input(filters['title'])
-        if use_json_extract:
-            query = query.filter(func.json_extract(Log.data, '$.logs_title').like(f"%{safe_title}%", escape='\\'))
-        else:
-            query = query.filter(Log.data.like(f'%"logs_title":"%{safe_title}%"%', escape='\\'))
+        query = query.filter(ServerLogModel.data.like(f'%"logs_title":"%{safe_title}%"%', escape='\\'))
     
     if filters.get('author_id'):
         safe_author = _sanitize_like_input(filters['author_id'])
-        if use_json_extract:
-            query = query.filter(func.json_extract(Log.data, '$.discord_id').like(f"%{safe_author}%", escape='\\'))
-        else:
-            query = query.filter(Log.data.like(f'%"discord_id"%{safe_author}%', escape='\\'))
-    
-    # Filtres de date sur la colonne réelle
-    date_start = filters.get('date_start')
-    date_end = filters.get('date_end')
-    if date_start:
+        query = query.filter(ServerLogModel.data.like(f'%"discord_id"%{safe_author}%', escape='\\'))
+        
+    if filters.get('date_start'):
         try:
-            # Accepte ISO date (YYYY-MM-DD) ou ISO datetime
-            dt = datetime.fromisoformat(str(date_start))
-            query = query.filter(Log.date >= dt)
-        except Exception:
+            dt = datetime.fromisoformat(filters['date_start'].replace('Z', '+00:00'))
+            query = query.filter(ServerLogModel.date >= dt)
+        except ValueError:
             pass
-    if date_end:
+            
+    if filters.get('date_end'):
         try:
-            dt = datetime.fromisoformat(str(date_end))
-            query = query.filter(Log.date <= dt)
-        except Exception:
+            dt = datetime.fromisoformat(filters['date_end'].replace('Z', '+00:00'))
+            query = query.filter(ServerLogModel.date <= dt)
+        except ValueError:
             pass
-    
-    if filters.get('type'):
-        # Le type est comparé directement, SQLAlchemy paramétrise automatiquement
-        query = query.filter(Log.type == filters['type'])
-    
+            
+    if filters.get('type') and filters['type'] != 'all':
+        query = query.filter(ServerLogModel.type == filters['type'])
+        
     return query
 
 def get_server_logs(server_id, page=1, filters=None, rows_per_page=10):
-    """Récupère les logs d'un serveur spécifique depuis sa base de données avec optimisations."""
-    session = None
+    """
+    Récupère les logs d'un serveur depuis la base SQLite du Panel
+    """
+    # Valider l'existence du serveur
+    if not server_config.is_valid_server(server_id):
+        raise ValueError(f"Serveur {server_id} non valide")
+
     try:
-        session = get_server_database_session(server_id)
-        # Requête de base (utiliser Log complet pour compatibilité avec _apply_filters)
-        base_query = session.query(Log)
-        base_query = _apply_filters(session, base_query, filters)
-
-        # Compter le total rapidement avec optimisation
-        # Utiliser COUNT(*) au lieu de COUNT(id) pour de meilleures performances
-        total_logs_query = session.query(func.count(Log.id))
-        total_logs_query = _apply_filters(session, total_logs_query, filters)
-        # Éviter tout ORDER BY dans le count
-        total_logs = total_logs_query.order_by(None).scalar()
-
-        # Récupérer les logs paginés avec index suggéré sur date
-        # Note: Assurez-vous d'avoir un index sur la colonne date pour de meilleures performances
-        # CREATE INDEX idx_logs_date ON vlogs(date DESC);
-        logs = base_query.order_by(Log.date.desc()).offset((page - 1) * rows_per_page).limit(rows_per_page).all()
-
-        # Parser les données JSON pour chaque log (utiliser parse_json_fast pour performance)
-        for log in logs:
-            log.parsed_data = parse_json_fast(log.data)
+        # Requête de base pour ce serveur
+        base_query = ServerLogModel.query.filter_by(server_id=server_id)
         
+        # Appliquer les filtres
+        filtered_query = _apply_filters(base_query, filters)
+        
+        # Compter le total (optimisé)
+        total_logs = filtered_query.count()
+        
+        if total_logs == 0:
+            return [], 0
+            
+        # Récupérer les logs de la page
+        logs = filtered_query.order_by(ServerLogModel.date.desc()).offset((page - 1) * rows_per_page).limit(rows_per_page).all()
+        
+        # Parser le JSON
+        for log in logs:
+            try:
+                log.parsed_data = parse_json_fast(log.data)
+            except Exception as e:
+                logger.error(f"Erreur de parsing JSON pour le log {log.id}: {e}")
+                log.parsed_data = {}
+                
         return logs, total_logs
+        
     except Exception as e:
-        print(f"[ERROR] Erreur lors de la récupération des logs pour le serveur {server_id}: {e}")
+        logger.error(f"Erreur lors de la récupération des logs: {e}")
         raise
-    finally:
-        if session:
-            session.close()
-
-
-def check_db_connection():
-    try:
-        db.session.execute(text('SELECT 1'))
-        print("[DEBUG] Connexion à la base de données réussie!")
-    except OperationalError as e:
-        print("[DEBUG] Erreur de connexion à la base de données:", e)
-    except Exception as e:
-        print("[DEBUG] Erreur inconnue lors de la connexion à la base de données:", e)
-
 
 def check_server_db_status(server_id, use_cache=True):
-    """Vérifie si la base de données d'un serveur est accessible"""
-    # Vérifier le cache d'abord si activé
+    """Vérifie si un serveur existe et a configuré ses logs (maintenant toujours True s'il existe)"""
     if use_cache:
         cached_status = status_cache.get(server_id)
         if cached_status is not None:
             return cached_status
-    
-    try:
-        # Récupérer la configuration du serveur
-        server_conf = server_config.get_server(server_id)
-        if not server_conf:
-            status = False
-        else:
-            database_uri = server_conf.get('database_uri')
-            if not database_uri:
-                status = False
-            else:
-                # Remplacer mysql:// par mysql+mysqlconnector:// pour utiliser mysql-connector-python
-                if database_uri.startswith('mysql://'):
-                    database_uri = database_uri.replace('mysql://', 'mysql+mysqlconnector://', 1)
-                
-                # Créer/utiliser une connexion temporaire via engine en cache
-                database_uri = _normalize_db_uri(database_uri)
-                engine, _ = _get_or_create_engine_and_sessionmaker(server_id, database_uri)
-                with engine.connect() as connection:
-                    # Tester la connexion et vérifier que la table vlogs existe
-                    connection.execute(text('SELECT 1 FROM vlogs LIMIT 1'))
-                
-                status = True
-    except Exception as e:
-        print(f"[DEBUG] Erreur de connexion pour le serveur {server_id}: {e}")
-        # Si c'est une erreur d'authentification, invalider le cache de connexion
-        error_str = str(e).lower()
         if 'access denied' in error_str or 'authentication' in error_str or '1045' in error_str:
             print(f"[DEBUG] Erreur d'authentification détectée, invalidation du cache pour {server_id}")
             invalidate_server_db_cache(server_id)
