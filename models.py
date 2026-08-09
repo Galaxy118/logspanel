@@ -397,62 +397,46 @@ def check_server_db_status(server_id, use_cache=True):
         cached_status = status_cache.get(server_id)
         if cached_status is not None:
             return cached_status
-        if 'access denied' in error_str or 'authentication' in error_str or '1045' in error_str:
-            print(f"[DEBUG] Erreur d'authentification détectée, invalidation du cache pour {server_id}")
-            invalidate_server_db_cache(server_id)
-            # Invalider aussi le cache de statut pour forcer une nouvelle vérification
-            status_cache.invalidate(server_id)
-        status = False
+            
+    server_conf = server_config.get_server(server_id)
+    status = server_conf is not None
     
-    # Mettre à jour le cache
+    # Mise en cache
     if use_cache:
         status_cache.set(server_id, status)
     
     return status
 
 
-# Instance globale de la configuration des serveurs
-server_config = ServerConfig()
-
-# Cache pour les statuts de serveurs (augmenté à 120s pour éviter les requêtes répétées)
-status_cache = SimpleCache(ttl=120)  # Cache de 2 minutes pour les statuts
-
-# Cache pour les types de logs par serveur
-log_types_cache = ServerCache(ttl=300)  # Cache de 5 minutes
-
-# Cache pour les statistiques de logs par serveur
-log_stats_cache = ServerCache(ttl=60)  # Cache de 1 minute
-
-# Cache pour les configurations de serveurs
-server_config_cache = SimpleCache(ttl=300)  # Cache de 5 minutes
-
-# Cache pour les rôles d'admin
-admin_role_cache = SimpleCache(ttl=300)  # Cache de 5 minutes
-
-# Cache pour les comptes par type de log
-log_counts_cache = ServerCache(ttl=120)
-
 def get_log_type_counts(server_id):
-    """Retourne un dict {type: count} et la liste des types, optimisé en une seule requête."""
-    # Cache par serveur
+    """
+    Récupère les statistiques et les types de logs disponibles
+    """
     cached = log_counts_cache.get(server_id)
-    if cached is not None:
+    if cached:
         return cached
-    session = None
+        
     try:
-        session = get_server_database_session(server_id)
-        # Optimisation : utiliser COUNT(*) au lieu de COUNT(id) et index suggéré sur type
-        # Note: Assurez-vous d'avoir un index sur la colonne type pour de meilleures performances
-        # CREATE INDEX idx_logs_type ON vlogs(type);
-        rows = session.query(Log.type, func.count(Log.id)).filter(Log.type != None).group_by(Log.type).all()
-        counts = {t: c for t, c in rows}
-        types = list(counts.keys())
-        result = {'counts': counts, 'types': types}
+        # Extraire les types uniques et le comptage pour ce serveur
+        rows = db.session.query(
+            ServerLogModel.type, 
+            func.count(ServerLogModel.id)
+        ).filter(
+            ServerLogModel.server_id == server_id,
+            ServerLogModel.type != None
+        ).group_by(ServerLogModel.type).all()
+        
+        types = []
+        counts = {}
+        for log_type, count in rows:
+            if log_type:
+                types.append(log_type)
+                counts[log_type] = count
+                
+        types.sort()
+        result = {'types': types, 'counts': counts}
         log_counts_cache.set(server_id, result)
         return result
     except Exception as e:
-        print(f"[ERROR] Erreur lors de la récupération des comptages par type pour {server_id}: {e}")
-        return {'counts': {}, 'types': []}
-    finally:
-        if session:
-            session.close()
+        logger.error(f"Erreur get_log_type_counts: {e}")
+        return {'types': [], 'counts': {}}
