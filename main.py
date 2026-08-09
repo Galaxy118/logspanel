@@ -431,7 +431,12 @@ app.jinja_env.filters['loads'] = json.loads
 app.jinja_env.add_extension('jinja2.ext.do')
 import os as _os
 db_path = _os.path.join(app.instance_path, 'panellogs.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = _os.getenv("DATABASE_URI") or f"sqlite:///{db_path}"
+env_db_uri = _os.getenv("DATABASE_URI")
+if env_db_uri and env_db_uri.startswith("sqlite:///") and not env_db_uri.startswith("sqlite:////"):
+    # Si l'URI est relative (3 slashs), on force le chemin absolu
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = env_db_uri or f"sqlite:///{db_path}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
