@@ -102,7 +102,7 @@
                                     <small class="text-muted">
                                         <i class="fab fa-discord me-1"></i>
                                         Discord: 
-                                        {% if server.discord and (server.discord.guild_id or server.discord.role_id_staff or server.discord.channel_id) %}
+                                        {% if server.discord and (server.discord.guild_id or server.discord.role_id_staff or server.discord.webhook_url) %}
                                             <span class="text-success">Configuré</span>
                                         {% else %}
                                             <span class="text-danger">Non configuré</span>
@@ -231,13 +231,13 @@
                                 <div class="form-text">Les membres avec ce rôle pourront consulter les logs</div>
                             </div>
                             <div class="mb-3">
-                                <label for="discord_channel_id" class="form-label">
-                                    <i class="fas fa-hashtag me-1"></i>
-                                    ID du Salon Discord
+                                <label for="discord_webhook_url" class="form-label">
+                                    <i class="fas fa-link me-1"></i>
+                                    URL du Webhook
                                 </label>
-                                <input type="text" class="form-control" id="discord_channel_id" name="discord_channel_id"
-                                       placeholder="123456789012345678">
-                                <div class="form-text">ID du salon Discord où le bot enverra les logs (activer le mode développeur Discord pour obtenir l'ID)</div>
+                                <input type="text" class="form-control" id="discord_webhook_url" name="discord_webhook_url"
+                                       placeholder="https://discord.com/api/webhooks/...">
+                                <div class="form-text">URL du Webhook Discord pour l'envoi des logs du serveur</div>
                             </div>
                         </div>
                     </div>

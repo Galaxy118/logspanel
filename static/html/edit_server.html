@@ -121,10 +121,10 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="discord_channel_id" class="form-label">ID du Salon Discord</label>
-                        <input type="text" class="form-control" id="discord_channel_id" name="discord_channel_id" 
-                               value="{{ server.discord.channel_id if server.discord else '' }}">
-                        <div class="form-text">ID du salon Discord où le bot enverra les logs (activer le mode développeur Discord pour obtenir l'ID)</div>
+                        <label for="discord_webhook_url" class="form-label">URL du Webhook</label>
+                        <input type="text" class="form-control" id="discord_webhook_url" name="discord_webhook_url" 
+                               value="{{ server.discord.webhook_url if server.discord else '' }}">
+                        <div class="form-text">URL du Webhook Discord où envoyer les logs de ce serveur</div>
                     </div>
                 </div>
 

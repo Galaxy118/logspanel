@@ -168,6 +168,7 @@ class ServerConfig:
                 'client_secret': config_data.get('discord', {}).get('client_secret', ''),
                 'bot_token': config_data.get('discord', {}).get('bot_token', ''),
                 'guild_id': config_data.get('discord', {}).get('guild_id', ''),
+                'webhook_url': config_data.get('discord', {}).get('webhook_url', ''),
                 'role_id_client': config_data.get('discord', {}).get('role_id_client', ''),
                 'role_id_staff': config_data.get('discord', {}).get('role_id_staff', ''),
             }

@@ -955,38 +955,7 @@ def sync_firewall_rules():
         # Log l'erreur mais ne pas propager
         app.logger.warning(f"Erreur lors de la synchronisation firewall: {e}")
 
-# Fonctions de vérification des rôles Discord
-async def check_discord_role_async(user_id, server_id, required_role='staff'):
-    """Vérifie les rôles Discord de manière asynchrone"""
-    try:
-        server_conf = get_server_config(server_id)
-        if not server_conf:
-            return False
-        
-        discord_config = server_conf.get('discord', {})
-        guild_id = discord_config.get('guild_id')
-        
-        role_id = discord_config.get('role_id_staff')
-        
-        if not guild_id or not role_id:
-            return False
-        
-        guild = bot.get_guild(int(guild_id))
-        if not guild:
-            return False
-        
-        member = guild.get_member(int(user_id))
-        if not member:
-            return False
-        
-        target_role = guild.get_role(int(role_id))
-        if not target_role:
-            return False
-        
-        return target_role in member.roles
-    except Exception as e:
-        print(f"[ERROR] Erreur lors de la vérification du rôle Discord: {e}")
-        return False
+
 
 def get_discord_member_roles_oauth(guild_id, access_token):
     """
@@ -1021,7 +990,7 @@ def get_discord_member_roles_oauth(guild_id, access_token):
 def get_discord_member_roles(server_conf, user_id, access_token=None):
     """
     Retourne la liste des rôles Discord (IDs) pour un utilisateur sur un serveur donné.
-    Priorité : OAuth2 (access_token) > Bot Discord > API HTTP avec Bot Token
+    Utilise UNIQUEMENT OAuth2 (access_token), ne nécessite pas de bot.
     """
     if not server_conf:
         return []
@@ -1029,70 +998,13 @@ def get_discord_member_roles(server_conf, user_id, access_token=None):
     discord_config = server_conf.get('discord', {})
     guild_id = discord_config.get('guild_id')
     
-    if not guild_id:
+    if not guild_id or not access_token:
         return []
     
-    # PRIORITÉ 1: Utiliser l'access token OAuth2 de l'utilisateur (ne nécessite pas de bot)
-    if access_token:
-        roles = get_discord_member_roles_oauth(guild_id, access_token)
-        if roles:
-            return roles
-    
-    # PRIORITÉ 2: Essayer via le bot Discord s'il est connecté et configuré
-    if DISCORD_BOT_TOKEN:
-        try:
-            if bot and bot.is_ready():
-                guild = bot.get_guild(int(guild_id))
-                if guild:
-                    member = guild.get_member(int(user_id))
-                    if member and getattr(member, 'roles', None):
-                        return [str(role.id) for role in member.roles if hasattr(role, 'id')]
-        except Exception as e:
-            debug_log("⚠️ Erreur vérification rôles via bot", guild_id=guild_id, error=str(e))
-        
-        # PRIORITÉ 3: Fallback via l'API HTTP Discord avec Bot Token
-        try:
-            url = f"https://discord.com/api/guilds/{guild_id}/members/{user_id}"
-            headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
-            res = requests.get(url, headers=headers, timeout=5)
-            
-            if res.status_code == 200:
-                member = res.json()
-                return [str(role_id) for role_id in member.get('roles', [])]
-            elif res.status_code == 404:
-                return []
-            else:
-                debug_log("⚠️ Discord API (bot) erreur", status=res.status_code, guild_id=guild_id)
-        except Exception as e:
-            debug_log("❌ Erreur API Discord (bot)", error=str(e), level="ERROR")
-    
-    return []
+    return get_discord_member_roles_oauth(guild_id, access_token)
 
 
-def check_discord_role_sync(user_id, server_id, required_role='staff'):
-    """Vérification hybride (bot + API HTTP) des rôles Discord"""
-    try:
-        # Le rôle admin n'existe plus (seul le propriétaire a les droits admin)
-        if required_role == 'admin':
-            return False
-            
-        server_conf = get_server_config(server_id)
-        if not server_conf:
-            return False
-            
-        target_role = server_conf.get('discord', {}).get('role_id_staff')
-        if not target_role:
-            return False
-            
-        # Vérifier si l'utilisateur possède le rôle
-        roles = get_discord_member_roles(server_conf, user_id)
-        if not roles:
-            return False
-            
-        return str(target_role) in roles
-    except Exception as e:
-        print(f"[ERROR] Erreur dans check_discord_role_sync: {e}")
-        return False
+
 
 def get_user_server_permissions(user_id, access_token=None):
     """Récupère les permissions de l'utilisateur pour tous les serveurs"""
@@ -1341,27 +1253,17 @@ def get_discord_guild_icon(server_id):
         return None
 
 def send_discord_log(server_id, message, embed=None):
-    """Envoie un message de log dans le salon Discord configuré pour le serveur"""
+    """Envoie un message de log dans le Webhook Discord configuré pour le serveur"""
     try:
-        if not DISCORD_BOT_TOKEN:
-            return False
-        
         server_conf = server_config.get_server(server_id)
         if not server_conf:
             return False
         
         discord_config = server_conf.get('discord', {})
-        channel_id = discord_config.get('channel_id')
+        webhook_url = discord_config.get('webhook_url')
         
-        if not channel_id:
+        if not webhook_url or not webhook_url.startswith('https://discord.com/api/webhooks/'):
             return False
-        
-        # Utiliser l'API HTTP Discord pour envoyer le message
-        url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
-        headers = {
-            "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
-            "Content-Type": "application/json"
-        }
         
         payload = {"content": message}
         if embed:
@@ -1373,10 +1275,11 @@ def send_discord_log(server_id, message, embed=None):
                 "fields": embed.get('fields', [])
             }]
         
-        response = requests.post(url, json=payload, headers=headers, timeout=5)
-        return response.status_code == 200
+        headers = {"Content-Type": "application/json"}
+        response = requests.post(webhook_url, json=payload, headers=headers, timeout=5)
+        return response.status_code in (200, 204)
     except Exception as e:
-        print(f"[ERROR] Erreur lors de l'envoi du log Discord pour {server_id}: {e}")
+        print(f"[ERROR] Erreur lors de l'envoi du log via Webhook pour {server_id}: {e}")
         return False
 
 
@@ -2626,7 +2529,7 @@ def edit_server(server_id):
                 'discord': {
                     'guild_id': request.form.get('discord_guild_id'),
                     'role_id_staff': request.form.get('discord_role_staff'),
-                    'channel_id': request.form.get('discord_channel_id')
+                    'webhook_url': request.form.get('discord_webhook_url')
                 }
             }
             
@@ -2834,7 +2737,7 @@ def create_server():
             'discord': {
                 'guild_id': request.form.get('discord_guild_id', '').strip(),
                 'role_id_staff': request.form.get('discord_role_staff', '').strip(),
-                'channel_id': request.form.get('discord_channel_id', '').strip()
+                'webhook_url': request.form.get('discord_webhook_url', '').strip()
             }
         }
         
