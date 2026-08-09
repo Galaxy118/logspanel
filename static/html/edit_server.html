@@ -112,18 +112,11 @@
                         <div class="form-text">ID du serveur Discord</div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-12 mb-3">
                             <label for="discord_role_staff" class="form-label">Rôle Staff</label>
                             <input type="text" class="form-control" id="discord_role_staff" name="discord_role_staff" 
                                    value="{{ server.discord.role_id_staff if server.discord else '' }}">
                             <div class="form-text">ID du rôle staff</div>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="discord_role_admin" class="form-label">Rôle Admin</label>
-                            <input type="text" class="form-control" id="discord_role_admin" name="discord_role_admin" 
-                                   value="{{ server.discord.role_id_admin if server.discord else '' }}">
-                            <div class="form-text">ID du rôle admin</div>
                         </div>
                     </div>
                     

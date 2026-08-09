@@ -170,7 +170,6 @@ class ServerConfig:
                 'guild_id': config_data.get('discord', {}).get('guild_id', ''),
                 'role_id_client': config_data.get('discord', {}).get('role_id_client', ''),
                 'role_id_staff': config_data.get('discord', {}).get('role_id_staff', ''),
-                'role_id_admin': config_data.get('discord', {}).get('role_id_admin', ''),
             }
         }
         

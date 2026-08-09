@@ -966,10 +966,7 @@ async def check_discord_role_async(user_id, server_id, required_role='staff'):
         discord_config = server_conf.get('discord', {})
         guild_id = discord_config.get('guild_id')
         
-        if required_role == 'admin':
-            role_id = discord_config.get('role_id_admin')
-        else:
-            role_id = discord_config.get('role_id_staff')
+        role_id = discord_config.get('role_id_staff')
         
         if not guild_id or not role_id:
             return False
@@ -1075,16 +1072,23 @@ def get_discord_member_roles(server_conf, user_id, access_token=None):
 def check_discord_role_sync(user_id, server_id, required_role='staff'):
     """Vérification hybride (bot + API HTTP) des rôles Discord"""
     try:
+        # Le rôle admin n'existe plus (seul le propriétaire a les droits admin)
+        if required_role == 'admin':
+            return False
+            
         server_conf = get_server_config(server_id)
+        if not server_conf:
+            return False
+            
+        target_role = server_conf.get('discord', {}).get('role_id_staff')
+        if not target_role:
+            return False
+            
+        # Vérifier si l'utilisateur possède le rôle
         roles = get_discord_member_roles(server_conf, user_id)
         if not roles:
             return False
-        
-        discord_config = server_conf.get('discord', {}) if server_conf else {}
-        target_role = discord_config.get('role_id_admin') if required_role == 'admin' else discord_config.get('role_id_staff')
-        if not target_role:
-            return False
-        
+            
         return str(target_role) in roles
     except Exception as e:
         print(f"[ERROR] Erreur dans check_discord_role_sync: {e}")
@@ -1151,15 +1155,10 @@ def get_user_server_permissions(user_id, access_token=None):
         
         discord_config = server_conf.get('discord', {})
         staff_role = str(discord_config.get('role_id_staff', '') or '')
-        admin_role = str(discord_config.get('role_id_admin', '') or '')
         
         if staff_role and staff_role in roles:
             debug_log("✅ Rôle Staff détecté", server_id=server_id, role_id=staff_role)
             permissions['accessible_servers'].append(server_id)
-        
-        if admin_role and admin_role in roles:
-            debug_log("✅ Rôle Admin détecté", server_id=server_id, role_id=admin_role)
-            permissions['admin_servers'].append(server_id)
     
     debug_log("🏁 Permissions finales calculées", 
              accessible=len(permissions['accessible_servers']) if isinstance(permissions['accessible_servers'], list) else 'all',
@@ -2627,7 +2626,6 @@ def edit_server(server_id):
                 'discord': {
                     'guild_id': request.form.get('discord_guild_id'),
                     'role_id_staff': request.form.get('discord_role_staff'),
-                    'role_id_admin': request.form.get('discord_role_admin'),
                     'channel_id': request.form.get('discord_channel_id')
                 }
             }
@@ -2836,7 +2834,6 @@ def create_server():
             'discord': {
                 'guild_id': request.form.get('discord_guild_id', '').strip(),
                 'role_id_staff': request.form.get('discord_role_staff', '').strip(),
-                'role_id_admin': request.form.get('discord_role_admin', '').strip(),
                 'channel_id': request.form.get('discord_channel_id', '').strip()
             }
         }
@@ -2848,13 +2845,14 @@ def create_server():
             debug_log("🏪 Attribution du serveur au client (propriétaire automatique)", owner_id=user_id)
             config_data['owner_id'] = str(user_id)
         elif is_super_admin:
-            # Le super admin peut spécifier un propriétaire via le formulaire
+            # Le super admin doit spécifier un propriétaire via le formulaire
             owner_id_form = request.form.get('owner_id', '').strip()
             if owner_id_form:
                 debug_log("👑 Propriétaire défini par admin", owner_id=owner_id_form)
                 config_data['owner_id'] = owner_id_form
             else:
-                debug_log("👑 Serveur créé sans propriétaire (admin uniquement)")
+                debug_log("❌ ID propriétaire manquant", level="WARNING")
+                return jsonify({'error': 'Le champ owner_id (ID Discord du propriétaire) est obligatoire'}), 400
         
         # Créer le serveur
         debug_log("💾 Création du serveur en cours...", server_id=server_id)

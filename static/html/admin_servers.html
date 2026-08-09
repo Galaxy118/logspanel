@@ -102,7 +102,7 @@
                                     <small class="text-muted">
                                         <i class="fab fa-discord me-1"></i>
                                         Discord: 
-                                        {% if server.discord and (server.discord.guild_id or server.discord.role_id_staff or server.discord.role_id_admin or server.discord.channel_id) %}
+                                        {% if server.discord and (server.discord.guild_id or server.discord.role_id_staff or server.discord.channel_id) %}
                                             <span class="text-success">Configuré</span>
                                         {% else %}
                                             <span class="text-danger">Non configuré</span>
@@ -198,11 +198,11 @@
                             <div class="mb-3">
                                 <label for="owner_id" class="form-label">
                                     <i class="fas fa-user-tag me-1"></i>
-                                    ID Discord du propriétaire
+                                    ID Discord du propriétaire *
                                 </label>
-                                <input type="text" class="form-control" id="owner_id" name="owner_id"
+                                <input type="text" class="form-control" id="owner_id" name="owner_id" required
                                        placeholder="123456789012345678">
-                                <div class="form-text">L'ID Discord de l'utilisateur qui sera propriétaire de ce serveur (optionnel)</div>
+                                <div class="form-text">L'ID Discord de l'utilisateur qui sera propriétaire de ce serveur</div>
                             </div>
                         </div>
                         
