@@ -89,7 +89,16 @@
                                     {{ server.description or 'Aucune description' }}
                                 </p>
                                 
-
+                                <div class="mb-2">
+                                    <small class="text-muted d-block mb-1">
+                                        <i class="fas fa-key me-1"></i>
+                                        Jeton d'API : 
+                                        {% if server.api_token %}
+                                            <code class="user-select-all" style="background: var(--bg-tertiary); padding: 2px 5px; border-radius: 4px; font-size: 0.8rem;">{{ server.api_token }}</code>
+                                        {% else %}
+                                            <span class="text-danger">Non généré</span>
+                                        {% endif %}
+                                    </small>
                                     <small class="text-muted">
                                         <i class="fab fa-discord me-1"></i>
                                         Discord: 

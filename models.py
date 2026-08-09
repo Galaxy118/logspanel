@@ -160,7 +160,7 @@ class ServerConfig:
             'display_name': config_data.get('display_name', server_id),
             'description': config_data.get('description', ''),
             'logo': config_data.get('logo', f'/static/logos/{server_id}.png'),
-            'status': 'offline',
+            'status': 'online',
             'api_token': secrets.token_urlsafe(32), # Jeton API généré
             'owner_id': config_data.get('owner_id', ''),
             'discord': {

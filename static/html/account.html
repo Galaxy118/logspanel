@@ -71,12 +71,14 @@
                     </div>
                     
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <small class="muted"><i class="fas fa-database me-1"></i> Base de données:</small>
-                            {% if client_server.config and client_server.config.database_uri %}
-                                <span class="badge bg-success ms-1">Configurée</span>
+                        <div class="col-md-12 mb-2">
+                            <small class="muted d-block mb-1"><i class="fas fa-key me-1"></i> Jeton d'API :</small>
+                            {% if client_server.config and client_server.config.api_token %}
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" value="{{ client_server.config.api_token }}" readonly style="background: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-color);">
+                                </div>
                             {% else %}
-                                <span class="badge bg-danger ms-1">Non configurée</span>
+                                <span class="badge bg-danger ms-1">Non généré</span>
                             {% endif %}
                         </div>
                         <div class="col-md-6">
