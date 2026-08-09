@@ -142,84 +142,34 @@ discord_role_cache = DiscordRoleCache()
 # Fonction centralisée pour obtenir le statut d'un serveur
 def get_server_status(server_id, use_cache=True):
     """Fonction centralisée pour obtenir le statut d'un serveur de manière cohérente"""
-    if use_cache:
-        cached_status = status_cache.get(server_id)
-        if cached_status is not None:
-            return {
-                'status': 'online' if cached_status else 'offline',
-                'db_accessible': cached_status,
-                'last_check': 'cached'
-            }
-    
-    # Vérification en temps réel
-    db_status = check_server_db_status(server_id, use_cache=use_cache)
+    server_conf = server_config.get_server(server_id)
+    if not server_conf:
+        return {
+            'status': 'offline',
+            'db_accessible': False,
+            'last_check': datetime.now().isoformat()
+        }
     return {
-        'status': 'online' if db_status else 'offline',
-        'db_accessible': db_status,
+        'status': server_conf.get('status', 'online'),
+        'db_accessible': True,
         'last_check': datetime.now().isoformat()
     }
 
 # Fonction pour obtenir tous les statuts de serveurs
 def get_all_servers_status(use_cache=True):
-    """Obtient le statut de tous les serveurs de manière cohérente - VERSION OPTIMISÉE avec threads"""
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-    
-    servers = server_config.get_servers()
+    """Obtient le statut de tous les serveurs"""
     status_data = {}
+    servers = server_config.get_servers()
     
-    def get_single_server_status(server_id, server_data):
-        """Fonction helper pour récupérer le statut d'un seul serveur"""
-        try:
-            server_status = get_server_status(server_id, use_cache)
-            return server_id, {
-                'display_name': server_data.get('display_name', server_id),
-                'description': server_data.get('description', ''),
-                **server_status
-            }
-        except Exception as e:
-            debug_log(f"Erreur statut serveur {server_id}", error=str(e), level="WARNING")
-            return server_id, {
-                'display_name': server_data.get('display_name', server_id),
-                'description': server_data.get('description', ''),
-                'status': 'offline',
-                'db_accessible': False,
-                'last_check': 'error'
-            }
-    
-    # Utiliser ThreadPoolExecutor pour vérifier tous les serveurs en parallèle
-    # Limite à 8 workers pour ne pas surcharger
-    with ThreadPoolExecutor(max_workers=min(8, len(servers) or 1)) as executor:
-        futures = {
-            executor.submit(get_single_server_status, sid, sdata): sid 
-            for sid, sdata in servers.items()
+    for server_id, server_data in servers.items():
+        status_data[server_id] = {
+            'display_name': server_data.get('display_name', server_id),
+            'description': server_data.get('description', ''),
+            'status': server_data.get('status', 'online'),
+            'db_accessible': True,
+            'last_check': datetime.now().isoformat()
         }
         
-        for future in futures:
-            try:
-                # Timeout de 3 secondes par serveur
-                server_id, result = future.result(timeout=3)
-                status_data[server_id] = result
-            except FuturesTimeoutError:
-                server_id = futures[future]
-                debug_log(f"Timeout vérification serveur {server_id}", level="WARNING")
-                status_data[server_id] = {
-                    'display_name': servers[server_id].get('display_name', server_id),
-                    'description': servers[server_id].get('description', ''),
-                    'status': 'offline',
-                    'db_accessible': False,
-                    'last_check': 'timeout'
-                }
-            except Exception as e:
-                server_id = futures[future]
-                debug_log(f"Erreur future serveur {server_id}", error=str(e), level="ERROR")
-                status_data[server_id] = {
-                    'display_name': servers[server_id].get('display_name', server_id),
-                    'description': servers[server_id].get('description', ''),
-                    'status': 'offline',
-                    'db_accessible': False,
-                    'last_check': 'error'
-                }
-    
     return status_data
 
 def invalidate_all_server_caches(server_id=None):
