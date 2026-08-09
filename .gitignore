@@ -91,3 +91,4 @@ gunicorn_logspanel.pid
 # =============================================================================
 default
 nginx.conf
+VoltreFinal
