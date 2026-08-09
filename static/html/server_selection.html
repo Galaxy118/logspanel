@@ -32,7 +32,7 @@
                 <img src="{{ user_data.avatar_url }}" alt="Avatar" class="user-avatar">
                 <div class="user-info">
                     <span class="username">{{ user_data.username }}</span>
-                    {% if is_super_admin %}
+                    {% if is_super_admin or (user_data and user_data.permissions and user_data.permissions.admin_servers and user_data.permissions.admin_servers|length) %}
                     <a href="{{ url_for('admin_servers') }}" class="admin-link">
                         <i class="fas fa-cogs"></i> Administration
                     </a>

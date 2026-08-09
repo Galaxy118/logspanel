@@ -38,7 +38,7 @@
                 </div>
             </div>
             <div class="ms-auto d-flex gap-2">
-                {% if is_super_admin %}
+                {% if is_super_admin or (admin_servers and admin_servers|length) %}
                     <a href="{{ url_for('admin_servers') }}" class="btn-primaryx"><i class="fas fa-cogs"></i> Administration</a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}" class="btn-outline"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>

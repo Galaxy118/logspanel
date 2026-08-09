@@ -47,9 +47,11 @@
                     <a href="{{ url_for('index') }}" class="btn-return-dashboard" title="Retour à l'accueil">
                         <i class="fas fa-arrow-left"></i>
                     </a>
+                    {% if user_data.permissions.is_super_admin or (user_data.permissions.admin_servers and user_data.permissions.admin_servers|length) %}
                     <a href="{{ url_for('admin_servers') }}" class="btn-admin-dashboard" title="Administration">
                         <i class="fas fa-cogs"></i>
                     </a>
+                    {% endif %}
                     <button class="btn-logout-dashboard" title="Déconnexion" id="logout-btn">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>

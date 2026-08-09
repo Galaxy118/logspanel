@@ -438,7 +438,7 @@ def rate_limit(limit_string):
 
 app.jinja_env.filters['loads'] = json.loads
 app.jinja_env.add_extension('jinja2.ext.do')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI")
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI") or "sqlite:///instance/panellogs.db"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
