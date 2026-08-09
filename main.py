@@ -1357,12 +1357,21 @@ def add_log(server_id=None):
     if not logs_data:
         return jsonify({"error": "Empty payload"}), 400
         
-    # Si server_id non fourni dans l'URL, le prendre du premier log (rétrocompatibilité)
+    # Si server_id non fourni dans l'URL ni dans le payload, chercher par token
     if not server_id:
         server_id = logs_data[0].get('server_id')
         
+    if not server_id:
+        # Trouver le serveur qui correspond au token
+        servers = server_config.get_servers()
+        for sid, sconf in servers.items():
+            valid_token = sconf.get('api_token')
+            if valid_token and secrets.compare_digest(str(token or ''), str(valid_token)):
+                server_id = sid
+                break
+                
     if not server_id or not re.match(r'^[a-zA-Z0-9_-]+$', server_id):
-        return jsonify({"error": "Invalid server_id format"}), 400
+        return jsonify({"error": "Invalid server_id format or missing server_id"}), 400
         
     server_conf = server_config.get_server(server_id)
     if not server_conf:
