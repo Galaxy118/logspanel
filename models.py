@@ -165,6 +165,11 @@ class ServerConfig:
 
 def migrate_config_to_db(app):
     """Fonction de migration à exécuter une fois au démarrage"""
+    with app.app_context():
+        # S'assurer que le dossier instance existe
+        os.makedirs(app.instance_path, exist_ok=True)
+        db.create_all()
+
     config_file = os.path.join(app.root_path, 'servers_config.json')
     
     if not os.path.exists(config_file):
@@ -175,7 +180,6 @@ def migrate_config_to_db(app):
             old_config = json.load(f)
             
         with app.app_context():
-            db.create_all()
             
             # Vérifier si la migration a déjà été faite
             if ServerConfigModel.query.first() is not None or GlobalConfigModel.query.first() is not None:

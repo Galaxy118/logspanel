@@ -164,7 +164,7 @@ def get_all_servers_status(use_cache=True):
     """Obtient le statut de tous les serveurs de manière cohérente - VERSION OPTIMISÉE avec threads"""
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
     
-    servers = server_config.get_all_servers()
+    servers = server_config.get_servers()
     status_data = {}
     
     def get_single_server_status(server_id, server_data):
@@ -887,7 +887,7 @@ def sync_firewall_rules():
         import subprocess
         import re
         
-        servers = server_config.get_all_servers()
+        servers = server_config.get_servers()
         db_hosts = set()
         
         # Pattern pour parser les URIs MySQL
@@ -2542,11 +2542,11 @@ def admin_servers():
     
     if is_super_admin:
         # Super-admin a accès à tous les serveurs
-        user_admin_servers = server_config.get_all_servers()
+        user_admin_servers = server_config.get_servers()
     else:
         # Filtrer selon les permissions admin de l'utilisateur (PAS les owned_servers)
         user_admin_servers = {}
-        all_servers = server_config.get_all_servers()
+        all_servers = server_config.get_servers()
         
         if admin_servers_list == 'all':
             user_admin_servers = all_servers
@@ -2797,7 +2797,7 @@ def create_server():
     # Limiter les clients à 1 seul serveur
     # IMPORTANT: Recalculer dynamiquement depuis la config (pas depuis le JWT qui peut être obsolète)
     if is_client and not is_super_admin:
-        all_servers = server_config.get_all_servers()
+        all_servers = server_config.get_servers()
         owned_servers = [
             sid for sid, conf in all_servers.items()
             if str(conf.get('owner_id', '') or '') == str(user_id)
