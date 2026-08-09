@@ -49,7 +49,7 @@ from discord.errors import LoginFailure
 import jinja2
 from jinja2 import TemplateNotFound
 
-from models import db, Log, check_db_connection, server_config, check_server_db_status, status_cache, log_types_cache, log_stats_cache, server_config_cache, admin_role_cache, get_server_logs, get_server_database_session, get_log_type_counts, log_counts_cache
+from models import db, Log, check_db_connection, server_config, check_server_db_status, status_cache, log_types_cache, log_stats_cache, server_config_cache, admin_role_cache, get_server_logs, get_server_database_session, get_log_type_counts, log_counts_cache, migrate_config_to_db
 
 # Décorateur pour protéger les routes avec JWT
 def require_auth(server_id=None, admin_required=False):
@@ -228,8 +228,6 @@ def invalidate_all_server_caches(server_id=None):
     Si server_id est fourni, invalide uniquement ce serveur.
     Sinon, invalide TOUS les caches.
     """
-    global _last_server_config_update
-    
     if server_id:
         # Invalider les caches pour un serveur spécifique
         status_cache.invalidate(server_id)
@@ -249,14 +247,7 @@ def invalidate_all_server_caches(server_id=None):
         admin_role_cache.invalidate()
         discord_role_cache.invalidate()
         
-        # CRITIQUE: Recharger la configuration depuis le fichier
-        # Car server_config garde l'ancienne config en mémoire
-        server_config.load_config()
-        
         debug_log("🗑️ Tous les caches invalidés et configuration rechargée")
-    
-    # Marquer qu'une modification a été faite pour la synchronisation client
-    _last_server_config_update = time.time()
 
 # Load environment variables with a safe encoding fallback
 try:
@@ -442,6 +433,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI") or "sqlite:///
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
+migrate_config_to_db(app)
 
 # Loader Jinja avec fallback d'encodage (UTF-8 puis latin-1)
 class FallbackFileSystemLoader(jinja2.BaseLoader):
@@ -895,17 +887,7 @@ def sync_firewall_rules():
         import subprocess
         import re
         
-        # Chemin du fichier de configuration
-        config_file = os.path.join(os.path.dirname(__file__), 'servers_config.json')
-        
-        if not os.path.exists(config_file):
-            return
-        
-        # Charger la configuration
-        with open(config_file, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-        
-        servers = config.get('servers', {})
+        servers = server_config.get_all_servers()
         db_hosts = set()
         
         # Pattern pour parser les URIs MySQL
@@ -2334,14 +2316,6 @@ def logout():
 def vite_client_stub():
     return ('', 204)
 
-# Variable globale pour stocker le timestamp de dernière modification
-_last_server_config_update = time.time()
-
-def mark_server_config_updated():
-    """Marque une modification de la configuration des serveurs"""
-    global _last_server_config_update
-    _last_server_config_update = time.time()
-
 @app.route('/api/servers/status')
 def get_servers_status():
     """API pour obtenir le statut de tous les serveurs avec cache optimisé et synchronisation"""
@@ -2359,7 +2333,7 @@ def get_servers_status():
     response_data = {
         'servers': servers_status,
         'timestamp': int(time.time() * 1000),  # Timestamp en millisecondes pour JS
-        'last_config_update': int(_last_server_config_update * 1000)
+        'last_config_update': 0
     }
     
     response = jsonify(response_data)

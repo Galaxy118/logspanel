@@ -399,7 +399,6 @@ set_permissions() {
     
     # Fichiers sensibles
     [[ -f "$DEPLOY_PATH/.env" ]] && chmod 600 "$DEPLOY_PATH/.env"
-    [[ -f "$DEPLOY_PATH/servers_config.json" ]] && chmod 600 "$DEPLOY_PATH/servers_config.json"
     
     # Répertoire instance (écriture pour la DB)
     mkdir -p "$DEPLOY_PATH/instance"
@@ -644,20 +643,9 @@ print_summary() {
         echo ""
     fi
     
-    # Étape 2: Configuration servers_config.json
-    if [[ ! -f "$DEPLOY_PATH/servers_config.json" ]]; then
-        echo "  2. Configurez servers_config.json :"
-        echo "     cp $DEPLOY_PATH/servers_config.json.example $DEPLOY_PATH/servers_config.json"
-        echo "     nano $DEPLOY_PATH/servers_config.json"
-        echo ""
-    else
-        echo "  2. ✓ Fichier servers_config.json déjà présent"
-        echo ""
-    fi
-    
-    # Étape 3: Cloudflare Tunnel (seulement si pas déjà configuré)
+    # Étape 2: Cloudflare Tunnel (seulement si pas déjà configuré)
     if [[ "$TUNNEL_ALREADY_RUNNING" == true ]]; then
-        echo "  3. ✓ Cloudflare Tunnel déjà configuré et actif"
+        echo "  2. ✓ Cloudflare Tunnel déjà configuré et actif"
         echo ""
     elif [[ "$SKIP_TUNNEL" == true ]]; then
         echo "  3. ✓ Configuration Cloudflare Tunnel conservée"

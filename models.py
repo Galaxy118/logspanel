@@ -50,154 +50,102 @@ class Log(db.Model):
         """Retourne les données JSON parsées"""
         return parse_json_fast(self.data)
 
+class ServerConfigModel(db.Model):
+    __tablename__ = 'server_configs'
+    id = db.Column(db.String(100), primary_key=True)
+    config_data = db.Column(db.Text, nullable=False)
+
+class GlobalConfigModel(db.Model):
+    __tablename__ = 'global_configs'
+    id = db.Column(db.String(50), primary_key=True)
+    config_data = db.Column(db.Text, nullable=False)
 
 class ServerConfig:
-    """Classe pour gérer la configuration des serveurs"""
+    """Classe pour gérer la configuration des serveurs (via SQLAlchemy)"""
     
-    def __init__(self, config_file='/var/www/logspanel/servers_config.json'):
-        self.config_file = config_file
-        self._config = None
-        self.load_config()
+    def __init__(self):
+        pass
     
     def load_config(self):
-        """Charge la configuration depuis le fichier JSON"""
-        try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
-                self._config = json.load(f)
-        except FileNotFoundError:
-            print(f"[ERROR] Fichier de configuration {self.config_file} non trouvé")
-            self._config = {'servers': {}, 'global': {}}
-        except json.JSONDecodeError as e:
-            print(f"[ERROR] Erreur de parsing JSON: {e}")
-            self._config = {'servers': {}, 'global': {}}
+        """Obsolète : la configuration est gérée dynamiquement par la base de données SQLite."""
+        pass
     
     def get_servers(self):
         """Retourne la liste des serveurs configurés"""
-        return self._config.get('servers', {})
+        servers = ServerConfigModel.query.all()
+        return {s.id: parse_json_fast(s.config_data) for s in servers}
     
     def get_server(self, server_id):
         """Retourne la configuration d'un serveur spécifique"""
-        return self._config.get('servers', {}).get(server_id)
+        server = ServerConfigModel.query.get(server_id)
+        if server:
+            return parse_json_fast(server.config_data)
+        return None
     
     def is_valid_server(self, server_id):
         """Vérifie si un serveur existe dans la configuration"""
-        return server_id in self._config.get('servers', {})
+        return db.session.query(ServerConfigModel.id).filter_by(id=server_id).first() is not None
     
     def get_server_list(self):
         """Retourne la liste des IDs de serveurs"""
-        return list(self._config.get('servers', {}).keys())
+        servers = db.session.query(ServerConfigModel.id).all()
+        return [s.id for s in servers]
     
     def get_global_config(self):
         """Retourne la configuration globale"""
-        return self._config.get('global', {})
+        global_config = GlobalConfigModel.query.get('global')
+        if global_config:
+            return parse_json_fast(global_config.config_data)
+        return {}
     
     def save_config(self):
-        """Sauvegarde la configuration dans le fichier JSON avec protection anti-RO"""
-        import subprocess
-        import time
-        
-        max_retries = 3
-        retry_delay = 0.5
-        
-        for attempt in range(max_retries):
-            try:
-                # PROTECTION: Forcer remount RW avant chaque tentative
-                try:
-                    subprocess.run(
-                        ['mount', '-o', 'remount,rw', '/'],
-                        check=False,
-                        timeout=2,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                    time.sleep(0.1)
-                except Exception:
-                    pass
-                
-                logger.debug(f"💾 Tentative {attempt + 1}/{max_retries}: sauvegarde de {self.config_file}")
-                
-                file_path = self.config_file if os.path.isabs(self.config_file) else os.path.join('/var/www/logspanel', self.config_file)
-                
-                # Écriture directe (évite les erreurs de création de .tmp avec systemd ProtectSystem=strict)
-                config_json = json.dumps(self._config, indent=2, ensure_ascii=False)
-                
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(config_json)
-                
-                logger.info(f"✅ Configuration sauvegardée avec succès: {file_path}")
-                return
-                
-            except OSError as e:
-                if e.errno == 30 and attempt < max_retries - 1:
-                    logger.warning(f"⚠️ FS en RO (essai {attempt + 1}/{max_retries}), retry...")
-                    time.sleep(retry_delay)
-                    continue
-                else:
-                    logger.error(f"❌ Erreur système lors de la sauvegarde: {e}")
-                    if e.errno == 30:
-                        logger.error("💿 Le système de fichiers est en lecture seule!")
-                        logger.error("💡 Solution: sudo mount -o remount,rw /")
-                    print(f"[ERROR] Erreur système: {e}")
-                    raise
-            except Exception as e:
-                logger.error(f"❌ Erreur lors de la sauvegarde: {e}")
-                logger.exception(e)
-                print(f"[ERROR] Erreur lors de la sauvegarde: {e}")
-                raise
+        """Obsolète : La sauvegarde est effectuée par db.session.commit() directement"""
+        pass
     
     def get_all_servers(self):
         """Retourne tous les serveurs avec leurs configurations"""
-        return self._config.get('servers', {})
+        return self.get_servers()
     
     def update_server_config(self, server_id, config_data):
         """Met à jour la configuration d'un serveur"""
-        if 'servers' not in self._config:
-            self._config['servers'] = {}
-        
-        if server_id not in self._config['servers']:
+        server = ServerConfigModel.query.get(server_id)
+        if not server:
             raise ValueError(f"Serveur {server_id} non trouvé")
         
-        # Mettre à jour la configuration
-        self._config['servers'][server_id].update(config_data)
-        
-        # Sauvegarder dans le fichier
-        self.save_config()
+        current_config = parse_json_fast(server.config_data)
+        current_config.update(config_data)
+        server.config_data = json.dumps(current_config, ensure_ascii=False)
+        db.session.commit()
         
         return True
     
     def delete_server(self, server_id):
         """Supprime un serveur de la configuration"""
-        if 'servers' not in self._config:
-            return False
-        
-        if server_id in self._config['servers']:
-            del self._config['servers'][server_id]
-            self.save_config()
+        server = ServerConfigModel.query.get(server_id)
+        if server:
+            db.session.delete(server)
+            db.session.commit()
             return True
-        
         return False
     
     def create_server(self, server_id, config_data):
         """Crée un nouveau serveur avec sa configuration"""
-        if 'servers' not in self._config:
-            self._config['servers'] = {}
-        
-        if server_id in self._config['servers']:
+        if self.is_valid_server(server_id):
             raise ValueError(f"Le serveur {server_id} existe déjà")
         
-        # Configuration par défaut pour un nouveau serveur
         default_config = {
             'display_name': config_data.get('display_name', server_id),
             'description': config_data.get('description', ''),
             'logo': config_data.get('logo', f'/static/logos/{server_id}.png'),
             'status': 'offline',
             'database_uri': config_data.get('database_uri', ''),
-            'owner_id': config_data.get('owner_id', ''),  # ID Discord du propriétaire (pour les clients)
+            'owner_id': config_data.get('owner_id', ''),
             'discord': {
                 'client_id': config_data.get('discord', {}).get('client_id', ''),
                 'client_secret': config_data.get('discord', {}).get('client_secret', ''),
                 'bot_token': config_data.get('discord', {}).get('bot_token', ''),
                 'guild_id': config_data.get('discord', {}).get('guild_id', ''),
+                'role_id_client': config_data.get('discord', {}).get('role_id_client', ''),
                 'role_id_staff': config_data.get('discord', {}).get('role_id_staff', ''),
                 'role_id_admin': config_data.get('discord', {}).get('role_id_admin', ''),
                 'channel_id': config_data.get('discord', {}).get('channel_id', '')
@@ -209,14 +157,46 @@ class ServerConfig:
             'db_accessible': False
         }
         
-        # Ajouter le nouveau serveur
-        self._config['servers'][server_id] = default_config
-        
-        # Sauvegarder dans le fichier
-        self.save_config()
+        new_server = ServerConfigModel(id=server_id, config_data=json.dumps(default_config, ensure_ascii=False))
+        db.session.add(new_server)
+        db.session.commit()
         
         return server_id
 
+def migrate_config_to_db(app):
+    """Fonction de migration à exécuter une fois au démarrage"""
+    config_file = os.path.join(app.root_path, 'servers_config.json')
+    
+    if not os.path.exists(config_file):
+        return
+        
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            old_config = json.load(f)
+            
+        with app.app_context():
+            db.create_all()
+            
+            # Vérifier si la migration a déjà été faite
+            if ServerConfigModel.query.first() is not None or GlobalConfigModel.query.first() is not None:
+                return
+                
+            logger.info("📦 Migration de servers_config.json vers la base de données SQLite...")
+            
+            # Migrer global
+            global_conf = old_config.get('global', {})
+            db.session.add(GlobalConfigModel(id='global', config_data=json.dumps(global_conf, ensure_ascii=False)))
+            
+            # Migrer les serveurs
+            servers = old_config.get('servers', {})
+            for server_id, server_data in servers.items():
+                db.session.add(ServerConfigModel(id=server_id, config_data=json.dumps(server_data, ensure_ascii=False)))
+                
+            db.session.commit()
+            logger.info("✅ Migration terminée avec succès. Vous pouvez supprimer servers_config.json en toute sécurité.")
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la migration: {e}")
 
 class SimpleCache:
     def __init__(self, ttl=300):
