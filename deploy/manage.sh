@@ -213,6 +213,15 @@ cmd_restart() {
     # Recharger systemd
     systemctl daemon-reload
     
+    # S'assurer que le dossier instance a les bonnes permissions pour SQLite
+    if [[ -d "$PROJECT_DIR/instance" ]]; then
+        chown -R www-data:www-data "$PROJECT_DIR/instance"
+    else
+        mkdir -p "$PROJECT_DIR/instance"
+        chown -R www-data:www-data "$PROJECT_DIR/instance"
+        chmod 755 "$PROJECT_DIR/instance"
+    fi
+    
     # Redémarrer le panel
     printf "${BLUE}Redémarrage du panel...${NC}\n"
     if systemctl restart logspanel; then

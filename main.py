@@ -322,9 +322,9 @@ def debug_log(message, level='DEBUG', **kwargs):
         logger.error(full_message)
     else:
         logger.debug(full_message)
-
-app = Flask(__name__, static_folder='static', template_folder='static/html')
-
+import os as _os
+_instance_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'instance')
+app = Flask(__name__, static_folder='static', template_folder='static/html', instance_path=_instance_path)
 # SÉCURITÉ: Clé secrète Flask obligatoire en production
 _flask_secret = os.getenv('FLASK_SECRET_KEY')
 if not _flask_secret:
