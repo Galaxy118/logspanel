@@ -36,15 +36,16 @@ except Exception:
         except Exception:
             return {}
 
-class Log(db.Model):
-    __tablename__ = 'vlogs'
+class ServerLogModel(db.Model):
+    __tablename__ = 'server_logs'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    type = db.Column(db.Text, nullable=False)  # tinytext équivalent
-    data = db.Column(db.Text, nullable=False)  # stockage JSON
-    date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    server_id = db.Column(db.String(100), index=True, nullable=False)
+    type = db.Column(db.Text, nullable=False)
+    data = db.Column(db.Text, nullable=False)
+    date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp(), index=True)
     
     def __repr__(self):
-        return f'<Log {self.id}: {self.type}>'
+        return f'<ServerLogModel {self.id}: {self.type}>'
     
     def get_data_json(self):
         """Retourne les données JSON parsées"""
