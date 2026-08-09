@@ -1318,32 +1318,6 @@ def mask_access_token(session_str):
         # Si ce n'est pas JSON, retourne brut
         return session_str
 
-@app.before_request
-def check_ip_whitelist():
-    if request.path.startswith('/api/'):
-        # Exception spéciale pour /api/servers/status - toujours accessible
-        if request.path == '/api/servers/status':
-            return  # Autoriser l'accès à tous pour cette route
-        
-        # Vérifier l'IP pour tous les serveurs configurés
-        ip = request.remote_addr
-        allowed = False
-        servers = server_config.get_servers()
-        
-        # Si aucun serveur n'est configuré, autoriser l'accès (pour éviter le 403)
-        if not servers:
-            return
-            
-        for server_id, server_conf in servers.items():
-            api_conf = server_conf.get('api', {})
-            allowed_ips = api_conf.get('allowed_ips', [])
-            if ip in allowed_ips:
-                allowed = True
-                break
-        
-        if not allowed:
-            return jsonify({"error": "Unauthorized IP"}), 403
-
 
 # SÉCURITÉ: Limites pour les données d'entrée de l'API
 MAX_LOG_TYPE_LENGTH = 100
