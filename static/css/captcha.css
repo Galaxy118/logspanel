@@ -1,15 +1,15 @@
 :root {
-    --bg-color: #050808;
-    --card-bg: #0c1211;
-    --card-border: #162320;
-    --text-color: #e8f0ef;
-    --text-muted: #6b8a84;
-    --accent-color: #8D12AB;
-    --accent-light: #af20d3;
+    --bg-color: transparent;
+    --card-bg: var(--glass-bg);
+    --card-border: var(--glass-border);
+    --text-color: var(--text-primary);
+    --text-muted: var(--text-tertiary);
+    --accent-color: var(--accent-primary);
+    --accent-light: var(--accent-secondary);
     --accent-glow: rgba(141, 18, 171, 0.4);
-    --success-color: #22c55e;
-    --error-color: #ef4444;
-    --accent-gradient: linear-gradient(135deg, #af20d3 0%, #8D12AB 50%, #6a0d82 100%);
+    --success-color: var(--accent-success);
+    --error-color: var(--accent-error);
+    --accent-gradient: linear-gradient(135deg, var(--accent-secondary) 0%, var(--accent-primary) 50%, #6a0d82 100%);
 }
 
 * {
@@ -19,13 +19,10 @@
 }
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    min-height: 100vh;
+    /* Base background handled by global-glass.css */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Space Grotesk', system-ui, sans-serif;
     padding: 20px;
     position: relative;
     overflow: hidden;
@@ -84,17 +81,15 @@ body {
 }
 
 .captcha-card {
-    background: linear-gradient(145deg, var(--card-bg) 0%, rgba(12, 18, 17, 0.95) 100%);
-    border: 1px solid var(--card-border);
-    border-radius: 24px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
     padding: 3rem 2.5rem;
     text-align: center;
     width: 100%;
-    box-shadow: 
-        0 25px 50px -12px rgba(0, 0, 0, 0.5),
-        0 0 0 1px rgba(141, 18, 171, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(10px);
+    box-shadow: var(--glass-shadow);
     position: relative;
     overflow: hidden;
 }

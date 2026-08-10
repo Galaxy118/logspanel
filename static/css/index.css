@@ -1,16 +1,8 @@
 :root {
-    --bg-color: #0a0f0d;
-    --card-bg: #141a17;
-    --darker-bg: #0d1210;
-    --text-color: #ffffff;
-    --accent-color: #8D12AB;
-    --hover-color: #af20d3ff;
-    --border-color: #1a231e;
-    --hover-bg: rgba(141,18,171,0.05);
-    --error-color: #ff4444;
-    --log-bg: #0d1210;
-    --log-hover-bg: #141a17;
-    --accent-gradient: linear-gradient(45deg, #af20d3ff, #8D12AB);
+    --accent-color: var(--accent-primary);
+    --hover-color: var(--accent-secondary);
+    --error-color: var(--accent-error);
+    --accent-gradient: linear-gradient(45deg, var(--accent-secondary), var(--accent-primary));
 }
 
 * {
@@ -20,13 +12,10 @@
 }
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    min-height: 100vh;
+    /* Base styling handled by global-glass.css */
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     padding: 20px;
 }
 
@@ -40,28 +29,29 @@ body {
 }
 
 .login-card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 15px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
     padding: 2.5rem;
     text-align: center;
     max-width: 400px;
     width: 100%;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--glass-shadow);
     margin: 0 auto;
 }
 
 .login-card h2 {
-    color: var(--accent-color);
+    color: var(--text-primary);
     margin-bottom: 1.5rem;
     font-weight: 600;
     font-size: 1.5rem;
 }
 
 .login-card p {
-    color: var(--text-color);
+    color: var(--text-secondary);
     margin-bottom: 2rem;
-    opacity: 0.9;
     font-size: 1rem;
     line-height: 1.5;
 }

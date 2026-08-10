@@ -1,15 +1,15 @@
 :root {
-    --bg-color: #0a0f0d;
-    --card-bg: #141a17;
-    --darker-bg: #0d1210;
-    --text-color: #ffffff;
-    --accent-color: #8D12AB;
-    --hover-color: #af20d3ff;
-    --border-color: #1a231e;
-    --hover-bg: rgba(141,18,171,0.05);
-    --error-color: #ff4444;
-    --success-color: #28a745;
-    --accent-gradient: linear-gradient(45deg, #af20d3ff, #8D12AB);
+    --bg-color: transparent;
+    --card-bg: var(--glass-bg);
+    --darker-bg: rgba(0, 0, 0, 0.2);
+    --text-color: var(--text-primary);
+    --accent-color: var(--accent-primary);
+    --hover-color: var(--accent-secondary);
+    --border-color: var(--glass-border);
+    --hover-bg: rgba(255, 255, 255, 0.05);
+    --error-color: var(--accent-error);
+    --success-color: var(--accent-success);
+    --accent-gradient: linear-gradient(45deg, var(--accent-secondary), var(--accent-primary));
 }
 
 * {
@@ -17,10 +17,7 @@
 }
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    min-height: 100vh;
-    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    /* Base background handled by global-glass.css */
     padding: 24px 0;
 }
 
@@ -48,9 +45,12 @@ body {
 }
 
 .profile-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
     padding: 20px;
     display: flex;
     gap: 16px;
@@ -150,9 +150,12 @@ body {
 }
 
 .server-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
     padding: 16px;
     transition: 0.2s;
 }
@@ -160,6 +163,7 @@ body {
 .server-card:hover {
     border-color: var(--accent-color);
     transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 .server-title {

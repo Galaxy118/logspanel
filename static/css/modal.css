@@ -24,11 +24,12 @@
 
 /* Conteneur de la modale */
 .custom-modal {
-    background: linear-gradient(135deg, #141a17 0%, #0d1210 100%);
-    border: 1px solid rgba(141, 18, 171, 0.3);
-    border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
-                0 0 40px rgba(141, 18, 171, 0.1);
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glass-shadow);
     max-width: 500px;
     width: 90%;
     max-height: 90vh;

@@ -1,37 +1,34 @@
-/* Variables CSS - Thème cohérent avec server_selection et account */
 :root {
-    --bg-color: #0a0f0d;
-    --card-bg: #141a17;
-    --darker-bg: #0d1210;
-    --text-color: #ffffff;
-    --accent-color: #8D12AB;
-    --hover-color: #af20d3ff;
-    --border-color: #1a231e;
-    --hover-bg: rgba(141,18,171,0.05);
-    --error-color: #ff4444;
-    --success-color: #28a745;
+    /* Overrides or localized variables using global glass vars */
+    --bg-color: transparent;
+    --card-bg: var(--glass-bg);
+    --darker-bg: rgba(0, 0, 0, 0.2);
+    --text-color: var(--text-primary);
+    --accent-color: var(--accent-primary);
+    --hover-color: var(--accent-secondary);
+    --border-color: var(--glass-border);
+    --hover-bg: rgba(255, 255, 255, 0.05);
+    --error-color: var(--accent-error);
+    --success-color: var(--accent-success);
     --warning-color: #f39c12;
-    --log-bg: #0d1210;
-    --log-hover-bg: #141a17;
-    --accent-gradient: linear-gradient(45deg, #af20d3ff, #8D12AB);
+    --log-bg: rgba(0, 0, 0, 0.15);
+    --log-hover-bg: rgba(255, 255, 255, 0.05);
+    --accent-gradient: linear-gradient(45deg, var(--accent-secondary), var(--accent-primary));
     
-    /* Variables de compatibilité pour le dashboard */
-    --primary-color: #8D12AB;
-    --secondary-color: #af20d3ff;
-    --text-primary: #ffffff;
-    --text-secondary: rgba(255, 255, 255, 0.7);
-    --text-muted: rgba(255, 255, 255, 0.5);
-    --bg-primary: #0a0f0d;
-    --bg-secondary: #0d1210;
-    --card-hover: #141a17;
-    --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --primary-color: var(--accent-primary);
+    --secondary-color: var(--accent-secondary);
+    --text-muted: var(--text-tertiary);
+    --bg-primary: transparent;
+    --bg-secondary: rgba(0, 0, 0, 0.2);
+    --card-hover: rgba(255, 255, 255, 0.05);
+    --shadow: var(--glass-shadow);
     --glow: 0 0 20px rgba(141, 18, 171, 0.3);
-    --sidebar-bg: #0d1210;
-    --accent-blue: #8D12AB;
-    --accent-blue-hover: #af20d3ff;
-    --table-header-bg: #141a17;
-    --table-row-bg: #0d1210;
-    --table-row-hover: #141a17;
+    --sidebar-bg: var(--glass-bg);
+    --accent-blue: var(--accent-primary);
+    --accent-blue-hover: var(--accent-secondary);
+    --table-header-bg: rgba(0, 0, 0, 0.3);
+    --table-row-bg: transparent;
+    --table-row-hover: rgba(255, 255, 255, 0.05);
 }
 
 /* Styles pour la nouvelle interface dashboard */
@@ -45,12 +42,12 @@
  }
 
 .dashboard-global-box {
-      background: var(--bg-color);
-      border: 1px solid var(--border-color);
+      background: transparent;
+      border: none;
       border-radius: 0;
       padding: 1rem;
       margin: 0;
-      box-shadow: var(--shadow);
+      box-shadow: none;
       flex: 1;
       min-height: 100vh;
       overflow: visible;
@@ -117,15 +114,18 @@
  }
  
  .logs-sidebar {
-       background: var(--card-bg);
-       border: 1px solid var(--border-color);
-       border-radius: 16px;
+       background: var(--glass-bg);
+       backdrop-filter: var(--glass-blur);
+       -webkit-backdrop-filter: var(--glass-blur);
+       border: 1px solid var(--glass-border);
+       border-radius: var(--radius-lg);
        padding: 1rem;
        min-height: fit-content;
        overflow: visible;
        position: sticky;
        top: 0.5rem;
        margin-top: -8px;
+       box-shadow: var(--glass-shadow);
    }
   
    .sidebar-title {
@@ -156,12 +156,14 @@
    .log-type-search-input {
        width: 100%;
        padding: 0.5rem 0.75rem;
-       background: var(--bg-secondary);
+       background: var(--glass-input-bg);
        border: 1px solid var(--border-color);
        border-radius: 8px;
        color: var(--text-color);
        font-size: 0.85rem;
        transition: all 0.2s ease;
+       backdrop-filter: blur(10px);
+       -webkit-backdrop-filter: blur(10px);
    }
 
    .log-type-search-input::placeholder {
@@ -191,14 +193,18 @@
    }
    
    .logs-main-area {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 16px;
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-lg);
         padding: 1rem;
         min-height: fit-content;
         overflow: visible;
         display: flex;
         flex-direction: column;
+        box-shadow: var(--glass-shadow);
+    }        flex-direction: column;
         margin-top: -8px;
     }
   
@@ -889,12 +895,14 @@ body::before {
 .filter-input input {
     width: 100%;
     padding: 0.75rem 1rem;
-    background: var(--darker-bg);
+    background: var(--glass-input-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     color: var(--text-color);
     font-size: 0.875rem;
     transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .filter-input input:focus {

@@ -1,50 +1,35 @@
 :root {
-    --bg-color: #0a0f0d;
-    --card-bg: #141a17;
-    --darker-bg: #0d1210;
-    --text-color: #ffffff;
-    --accent-color: #8D12AB;
-    --hover-color: #af20d3ff;
-    --border-color: #1a231e;
-    --hover-bg: rgba(141,18,171,0.05);
-    --error-color: #ff4444;
-    --success-color: #28a745;
+    --bg-color: transparent;
+    --card-bg: var(--glass-bg);
+    --darker-bg: rgba(0, 0, 0, 0.2);
+    --text-color: var(--text-primary);
+    --accent-color: var(--accent-primary);
+    --hover-color: var(--accent-secondary);
+    --border-color: var(--glass-border);
+    --hover-bg: rgba(255, 255, 255, 0.05);
+    --error-color: var(--accent-error);
+    --success-color: var(--accent-success);
     --warning-color: #f39c12;
-    --log-bg: #0d1210;
-    --log-hover-bg: #141a17;
-    --accent-gradient: linear-gradient(45deg, #af20d3ff, #8D12AB);
+    --log-bg: rgba(0, 0, 0, 0.15);
+    --log-hover-bg: rgba(255, 255, 255, 0.05);
+    --accent-gradient: linear-gradient(45deg, var(--accent-secondary), var(--accent-primary));
     
     /* Variables de compatibilité */
-    --primary-color: #8D12AB;
-    --secondary-color: #af20d3ff;
-    --text-secondary: rgba(255, 255, 255, 0.7);
+    --primary-color: var(--accent-primary);
+    --secondary-color: var(--accent-secondary);
+    --text-secondary: var(--text-tertiary);
     --text-muted: rgba(255, 255, 255, 0.5);
-    --bg-primary: #0a0f0d;
-    --bg-secondary: #0d1210;
-    --card-hover: #141a17;
-    --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    --bg-primary: transparent;
+    --bg-secondary: rgba(0, 0, 0, 0.2);
+    --card-hover: rgba(255, 255, 255, 0.05);
+    --shadow: var(--glass-shadow);
     --glow: 0 0 20px rgba(141, 18, 171, 0.3);
 }
 
 body {
-    background: var(--bg-color);
+    /* Base background handled by global-glass.css */
     min-height: 100vh;
-    font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: var(--text-color);
     padding: 20px 0;
-}
-
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle at 20% 80%, rgba(141, 18, 171, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(175, 32, 211, 0.1) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: -1;
 }
 
 .logo-Galaxy {
@@ -69,10 +54,12 @@ body::before {
 }
 
 .edit-container {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 24px;
-    box-shadow: var(--shadow);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--glass-shadow);
     margin: 2rem auto;
     max-width: 900px;
     padding: 3rem;
