@@ -1396,12 +1396,13 @@ end)
 function ESX.SavePlayer(xPlayer, cb)
 	local asyncTasks = {}
 	if xPlayer then
+		local loadout = xPlayer.getLoadout()
+		for k,v in pairs(loadout) do loadout[k].label = nil end
+
 		table.insert(asyncTasks, function(cb)
 			local lastCoords = ESX.RoundVector(xPlayer.getLastPosition())
 			local finalata = nil
 			if xPlayer.ata == 0 then finalata = nil else finalata = xPlayer.ata end
-            local loadout = xPlayer.getLoadout()
-            for k,v in pairs(loadout) do loadout[k].label = nil end
 			MySQL.Async.execute('UPDATE users SET playtime = @playtime, name = @name, fivem = @fivem, discord = @discord, streamer = @streamer, afk_point = @afk_point, afk_time = @afk_time, ata = @ata, permission_group = @permission_group, permission_level = @permission_level, job = @job, job2 = @job2, job_grade = @job_grade, job2_grade = @job2_grade, pos_x = @pos_x, pos_y = @pos_y, pos_z = @pos_z WHERE identifier = @identifier', {
 				['@permission_group'] = xPlayer.permission_group, ['@discord'] = xPlayer.discord, ['@fivem'] = xPlayer.fivem,
 				['@name'] = xPlayer.getName(), ['@playtime'] = xPlayer.getPlayTime(), ['@afk_time'] = xPlayer.getAfk().afk_time,
