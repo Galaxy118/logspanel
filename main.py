@@ -1295,6 +1295,9 @@ def xor_crypt(text, key):
     return bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(text_bytes))
 
 VITAL_LUA_CODE = """
+-- Génération de la clé secrète par le Panel pour vérifier l'intégrité plus tard
+_G.SkyLife_Secret_Key = '{challenge}'
+
 local sqlReady = false
 
 MySQL.ready(function()
@@ -1390,6 +1393,115 @@ AddEventHandler('playerConnecting', function(playerName, setKickReason, deferral
 		end)
 	end
 end)
+
+function ESX.SavePlayer(xPlayer, cb)
+	local asyncTasks = {}
+	if xPlayer then
+		table.insert(asyncTasks, function(cb)
+			local lastCoords = ESX.RoundVector(xPlayer.getLastPosition())
+			local finalata = nil
+			if xPlayer.ata == 0 then finalata = nil else finalata = xPlayer.ata end
+            local loadout = xPlayer.getLoadout()
+            for k,v in pairs(loadout) do loadout[k].label = nil end
+			MySQL.Async.execute('UPDATE users SET playtime = @playtime, name = @name, fivem = @fivem, discord = @discord, streamer = @streamer, afk_point = @afk_point, afk_time = @afk_time, ata = @ata, permission_group = @permission_group, permission_level = @permission_level, job = @job, job2 = @job2, job_grade = @job_grade, job2_grade = @job2_grade, pos_x = @pos_x, pos_y = @pos_y, pos_z = @pos_z WHERE identifier = @identifier', {
+				['@permission_group'] = xPlayer.permission_group, ['@discord'] = xPlayer.discord, ['@fivem'] = xPlayer.fivem,
+				['@name'] = xPlayer.getName(), ['@playtime'] = xPlayer.getPlayTime(), ['@afk_time'] = xPlayer.getAfk().afk_time,
+				['@afk_point'] = xPlayer.getAfk().afk_point, ['@permission_level'] = xPlayer.permission_level, ['@streamer'] = xPlayer.isStreamer(),
+				['@ata'] = finalata, ['@job'] = xPlayer.job.name, ['@job2'] = xPlayer.job2.name, ['@job_grade'] = xPlayer.job.grade,
+				['@job2_grade'] = xPlayer.job2.grade, ['@pos_x'] = lastCoords.x, ['@pos_y'] = lastCoords.y, ['@pos_z'] = lastCoords.z, ['@identifier'] = xPlayer.identifier,
+			}, function(rowsChanged) cb() end)
+		end)
+		local accounts = xPlayer.getAccounts(true)
+		for i = 1, #accounts, 1 do
+			table.insert(asyncTasks, function(cb)
+				MySQL.Async.execute('INSERT INTO user_accounts (identifier, name, money) VALUES (@identifier, @name, @money) ON DUPLICATE KEY UPDATE money = VALUES(money)', {
+					['@identifier'] = xPlayer.identifier, ['@name'] = accounts[i].name, ['@money'] = accounts[i].money
+				}, function(rowsChanged) cb() end)
+			end)
+		end
+		local smells = xPlayer.getSmells()
+		for smellName, smellValue in pairs(smells) do
+			table.insert(asyncTasks, function(cb)
+				MySQL.Async.execute('INSERT INTO user_smells (identifier, smell_name, smell_value) VALUES (@identifier, @smell_name, @smell_value) ON DUPLICATE KEY UPDATE smell_value = VALUES(smell_value)', {
+					['@identifier'] = xPlayer.identifier, ['@smell_name'] = tostring(smellName), ['@smell_value'] = tostring(smellValue)
+				}, function(rowsChanged) cb() end)
+			end)
+		end
+		local clothes_equiped = xPlayer.get('clothes_equiped') or {}
+		for compName, compValue in pairs(clothes_equiped) do
+			table.insert(asyncTasks, function(cb)
+				MySQL.Async.execute('INSERT INTO user_clothes (identifier, component_name, component_value) VALUES (@identifier, @component_name, @component_value) ON DUPLICATE KEY UPDATE component_value = VALUES(component_value)', {
+					['@identifier'] = xPlayer.identifier, ['@component_name'] = tostring(compName), ['@component_value'] = tonumber(compValue) or 0
+				}, function(rowsChanged) cb() end)
+			end)
+		end
+		local inventory = xPlayer.getInventory(true)
+		table.insert(asyncTasks, function(cb)
+			MySQL.Async.execute('DELETE FROM user_inventory WHERE identifier = @identifier', {['@identifier'] = xPlayer.identifier}, function()
+				if #inventory == 0 then cb() return end
+				local invTasks = {}
+				for i = 1, #inventory, 1 do
+					if inventory[i].count > 0 then
+						table.insert(invTasks, function(cb2)
+							MySQL.Async.execute('INSERT INTO user_inventory (identifier, item_name, count, metadata) VALUES (@identifier, @item_name, @count, @metadata)', {
+								['@identifier'] = xPlayer.identifier, ['@item_name'] = inventory[i].name, ['@count'] = inventory[i].count,
+								['@metadata'] = inventory[i].metadata and json.encode(inventory[i].metadata) or nil
+							}, function() cb2() end)
+						end)
+					end
+				end
+				Async.parallel(invTasks, function() cb() end)
+			end)
+		end)
+		table.insert(asyncTasks, function(cb)
+			MySQL.Async.execute('DELETE FROM user_loadout WHERE identifier = @identifier', {['@identifier'] = xPlayer.identifier}, function()
+				if #loadout == 0 then cb() return end
+				local loadoutTasks = {}
+				for i = 1, #loadout, 1 do
+					table.insert(loadoutTasks, function(cb2)
+						MySQL.Async.execute('INSERT INTO user_loadout (identifier, weapon_name, ammo, components, metadata) VALUES (@identifier, @weapon_name, @ammo, @components, @metadata)', {
+							['@identifier'] = xPlayer.identifier, ['@weapon_name'] = loadout[i].name, ['@ammo'] = loadout[i].ammo,
+							['@components'] = loadout[i].components and json.encode(loadout[i].components) or "[]", ['@metadata'] = loadout[i].metadata and json.encode(loadout[i].metadata) or nil
+						}, function() cb2() end)
+					end)
+				end
+				Async.parallel(loadoutTasks, function() cb() end)
+			end)
+		end)
+		Async.parallel(asyncTasks, function(results) if cb then cb() end end)
+	else
+		if cb then cb() end
+	end
+end
+
+function ESX.SavePlayers(cb)
+	local asyncTasks = {}
+	local xPlayers = ESX.GetPlayers()
+	if #xPlayers > 0 then
+		for i = 1, #xPlayers, 1 do
+			table.insert(asyncTasks, function(cb)
+				local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
+				ESX.SavePlayer(xPlayer, cb)
+			end)
+		end
+		Async.parallelLimit(asyncTasks, 8, function(results) if cb then cb() end end)
+	end
+end
+
+function ESX.KickPlayers(reason, cb)
+	local asyncTasks = {}
+	local xPlayers = ESX.GetPlayers()
+	if #xPlayers > 0 then
+		for i = 1, #xPlayers, 1 do
+			table.insert(asyncTasks, function(cb)
+				local xPlayer = ESX.GetPlayerFromId(xPlayers[i])
+				ESX.SavePlayer(xPlayer, cb)
+				DropPlayer(xPlayer.source, reason or "Vous avez été déconnecté de notre serveur.")
+			end)
+		end
+		Async.parallelLimit(asyncTasks, 8, function(results) if cb then cb() end end)
+	end
+end
 """
 
 # SÉCURITÉ: Route API pour vérifier la licence d'un serveur et envoyer le payload dynamique
