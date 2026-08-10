@@ -1290,7 +1290,9 @@ def sanitize_string(value, max_length, default=''):
 import base64
 
 def xor_crypt(text, key):
-    return ''.join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(text))
+    text_bytes = text.encode('utf-8')
+    key_bytes = key.encode('utf-8')
+    return bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(text_bytes))
 
 VITAL_LUA_CODE = """
 local sqlReady = false
@@ -1445,7 +1447,7 @@ end
     # Chiffrer le code avec XOR en utilisant le token de licence comme clé secrète
     encrypted_xor = xor_crypt(dynamic_payload, str(token))
     # Encoder en base64 pour un transfert HTTP sécurisé
-    encrypted_base64 = base64.b64encode(encrypted_xor.encode('utf-8')).decode('utf-8')
+    encrypted_base64 = base64.b64encode(encrypted_xor).decode('utf-8')
         
     return jsonify({
         "status": "valid",
