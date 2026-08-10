@@ -129,37 +129,58 @@
                 </div>
 
                 {% set is_super_admin = user_data.permissions.get('is_super_admin', False) %}
+                {% set is_owner = server.owner_id and server.owner_id == user_data.user_id|string %}
                 
-                {% if is_super_admin %}
-                <!-- Gestion de la Licence (Super Admin uniquement) -->
+                {% if is_super_admin or is_owner %}
+                <!-- Gestion / Vue de la Licence -->
                 <div class="form-section mb-4">
                     <h4 class="section-title text-primary mb-3">
                         <i class="fas fa-id-card me-2"></i>
-                        Gestion de la Licence
+                        {% if is_super_admin %}Gestion de la Licence{% else %}Statut de la Licence{% endif %}
                     </h4>
                     
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label for="license_active" class="form-label">Statut de la Licence</label>
-                            <select class="form-select" id="license_active" name="license_active">
-                                {% set is_license_active = server.license.active if server.license is defined else True %}
-                                <option value="true" {% if is_license_active %}selected{% endif %}>🟢 Active (Autorisé)</option>
-                                <option value="false" {% if not is_license_active %}selected{% endif %}>🔴 Suspendue (Bloqué)</option>
-                            </select>
-                            <div class="form-text">Détermine si le serveur FiveM est autorisé à démarrer.</div>
+                            <label for="license_active" class="form-label">Statut</label>
+                            {% set is_license_active = server.license.active if server.license is defined else True %}
+                            
+                            {% if is_super_admin %}
+                                <select class="form-select" id="license_active" name="license_active">
+                                    <option value="true" {% if is_license_active %}selected{% endif %}>🟢 Active (Autorisé)</option>
+                                    <option value="false" {% if not is_license_active %}selected{% endif %}>🔴 Suspendue (Bloqué)</option>
+                                </select>
+                                <div class="form-text">Détermine si le serveur FiveM est autorisé à démarrer.</div>
+                            {% else %}
+                                {% if is_license_active %}
+                                    <div class="form-control" style="background-color: rgba(46, 204, 113, 0.1); color: #2ecc71; border-color: #2ecc71; font-weight: bold;" readonly>
+                                        <i class="fas fa-check-circle me-1"></i> Active (Autorisé)
+                                    </div>
+                                {% else %}
+                                    <div class="form-control" style="background-color: rgba(231, 76, 60, 0.1); color: #e74c3c; border-color: #e74c3c; font-weight: bold;" readonly>
+                                        <i class="fas fa-times-circle me-1"></i> Suspendue (Bloqué)
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">État d'autorisation de votre serveur FiveM.</div>
+                            {% endif %}
                         </div>
                         
                         <div class="col-md-8 mb-3">
-                            <label for="license_reason" class="form-label">Raison de la suspension</label>
-                            <input type="text" class="form-control" id="license_reason" name="license_reason" 
-                                   value="{{ server.license.reason if server.license is defined else '' }}"
-                                   placeholder="Ex: Non paiement, Abus, etc...">
-                            <div class="form-text">Affiché au client dans la console si le serveur est suspendu.</div>
+                            <label for="license_reason" class="form-label">{% if is_super_admin %}Raison de la suspension{% else %}Informations additionnelles{% endif %}</label>
+                            {% if is_super_admin %}
+                                <input type="text" class="form-control" id="license_reason" name="license_reason" 
+                                       value="{{ server.license.reason if server.license is defined else '' }}"
+                                       placeholder="Ex: Non paiement, Abus, etc...">
+                                <div class="form-text">Affiché au client dans la console si le serveur est suspendu.</div>
+                            {% else %}
+                                <input type="text" class="form-control" 
+                                       value="{{ server.license.reason if (server.license is defined and server.license.reason and not is_license_active) else 'Votre licence est valide et fonctionnelle.' }}"
+                                       readonly style="background: var(--bg-tertiary); color: var(--text-color);">
+                            {% endif %}
                         </div>
                     </div>
                 </div>
                 {% endif %}
-                {% set is_owner = server.owner_id and server.owner_id == user_data.user_id|string %}
+                
                 {% if is_super_admin or is_owner %}
                 <!-- Zone de Danger -->
                 <div class="form-section border border-danger mb-4" style="border-radius: 8px; padding: 20px;">
