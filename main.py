@@ -1446,13 +1446,13 @@ end
 """
     # Chiffrer le code avec XOR en utilisant le token de licence comme clé secrète
     encrypted_xor = xor_crypt(dynamic_payload, str(token))
-    # Encoder en base64 pour un transfert HTTP sécurisé
-    encrypted_base64 = base64.b64encode(encrypted_xor).decode('utf-8')
+    # Encoder en Hexadécimal pour éviter les bugs de padding Base64 en Lua
+    encrypted_hex = encrypted_xor.hex()
         
     return jsonify({
         "status": "valid",
         "server": server_conf.get('display_name', server_id),
-        "payload": encrypted_base64
+        "payload": encrypted_hex
     }), 200
 
 # SÉCURITÉ: Route API exemptée de CSRF (utilise des tokens d'authentification)
