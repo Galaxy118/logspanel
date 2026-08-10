@@ -128,6 +128,29 @@
                     </div>
                 </div>
 
+                {% set is_super_admin = user_data.permissions.get('is_super_admin', False) %}
+                {% set is_owner = server.owner_id and server.owner_id == user_data.user_id|string %}
+                {% if is_super_admin or is_owner %}
+                <!-- Zone de Danger -->
+                <div class="form-section border border-danger mb-4" style="border-radius: 8px; padding: 20px;">
+                    <h4 class="section-title text-danger mb-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Zone de Danger
+                    </h4>
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">Purger les logs du serveur</h6>
+                            <p class="text-muted mb-0" style="font-size: 0.9rem;">Cette action supprimera définitivement tous les logs de ce serveur de la base de données. Cette action est irréversible.</p>
+                        </div>
+                        <button type="button" class="btn btn-outline-danger" onclick="if(confirm('Êtes-vous absolument sûr de vouloir supprimer DÉFINITIVEMENT tous les logs de ce serveur ? Cette action est irréversible !')) { document.getElementById('purge-form').submit(); }">
+                            <i class="fas fa-trash-alt me-2"></i>
+                            Purger tous les logs
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Boutons d'action -->
                 <div class="text-center">
                     <button type="submit" class="btn btn-save me-3">
@@ -142,6 +165,13 @@
             </form>
         </div>
     </div>
+
+    <!-- Formulaire caché pour la purge des logs -->
+    {% if is_super_admin or is_owner %}
+    <form id="purge-form" action="{{ url_for('purge_server_logs', server_id=server_id) }}" method="POST" style="display: none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endif %}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/edit_server.js', v=ASSET_VERSION) }}"></script>

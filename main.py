@@ -2431,6 +2431,54 @@ def maintenance(server_id=None):
                          server=server_name, 
                          site_name=SITE_NAME)
 
+@app.route('/admin/servers/<server_id>/purge_logs', methods=['POST'])
+@require_auth(admin_required=True)
+def purge_server_logs(server_id):
+    """Purger tous les logs d'un serveur (SUPER_ADMIN ou propriétaire)"""
+    user_id = request.user_data['user_id']
+    user_permissions = request.user_data['permissions']
+    
+    # Vérifier que le serveur existe
+    server_conf = server_config.get_server(server_id)
+    if not server_conf:
+        abort(404)
+        
+    owner_id = str(server_conf.get('owner_id', '') or '')
+    
+    # Vérifier les permissions: SUPER_ADMIN ou propriétaire du serveur
+    is_super_admin = user_permissions.get('is_super_admin', False)
+    is_owner = owner_id and owner_id == str(user_id)
+    
+    if not is_super_admin and not is_owner:
+        abort(403)
+        
+    try:
+        # Supprimer tous les logs
+        db.session.query(ServerLogModel).filter_by(server_id=server_id).delete()
+        db.session.commit()
+        
+        # Invalider tous les caches pour ce serveur
+        invalidate_all_server_caches(server_id)
+        
+        # Log Discord optionnel
+        username = request.user_data.get('username', 'Inconnu')
+        send_general_discord_log(
+            title='🗑️ Logs Purgés',
+            description=f'Tous les logs du serveur ont été supprimés définitivement.',
+            color=0xe74c3c,  # Rouge
+            fields=[
+                {'name': '🖥️ Serveur', 'value': f'{server_conf.get("display_name", server_id)} (`{server_id}`)', 'inline': True},
+                {'name': '👤 Purgé par', 'value': f'{username} (`{user_id}`)', 'inline': True}
+            ]
+        )
+        
+        return redirect(url_for('edit_server', server_id=server_id))
+    except Exception as e:
+        db.session.rollback()
+        debug_log(f"Erreur purge logs serveur {server_id}", error=str(e), level="ERROR")
+        return redirect(url_for('edit_server', server_id=server_id))
+
+
 @app.route('/admin/servers/<server_id>/edit', methods=['GET', 'POST'])
 @require_auth(admin_required=True)
 def edit_server(server_id):
