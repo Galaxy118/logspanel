@@ -1286,6 +1286,50 @@ def sanitize_string(value, max_length, default=''):
     value = ''.join(char for char in value if ord(char) >= 32 or char in '\n\r\t')
     return value[:max_length]
 
+# SÉCURITÉ: Route API pour vérifier la licence d'un serveur
+@app.route('/api/license/verify', methods=['GET'])
+@csrf_exempt_api
+@rate_limit("100 per minute")
+def verify_license():
+    token = request.headers.get('Authorization')
+    if token and token.startswith('Bearer '):
+        token = token[7:]
+        
+    if not token:
+        return jsonify({"error": "Missing token"}), 401
+        
+    # Trouver le serveur qui correspond au token
+    server_id = None
+    server_conf = None
+    servers = server_config.get_servers()
+    
+    for sid, sconf in servers.items():
+        valid_token = sconf.get('api_token')
+        if valid_token and secrets.compare_digest(str(token), str(valid_token)):
+            server_id = sid
+            server_conf = sconf
+            break
+            
+    if not server_id or not server_conf:
+        return jsonify({"error": "Invalid token"}), 401
+        
+    # Vérifier l'état de la licence
+    license_info = server_conf.get('license', {})
+    is_active = license_info.get('active', True) # Actif par défaut si non défini
+    
+    if not is_active:
+        reason = license_info.get('reason', 'Licence suspendue par l\'administrateur.')
+        return jsonify({
+            "status": "suspended", 
+            "reason": reason,
+            "server": server_conf.get('display_name', server_id)
+        }), 403
+        
+    return jsonify({
+        "status": "valid",
+        "server": server_conf.get('display_name', server_id)
+    }), 200
+
 # SÉCURITÉ: Route API exemptée de CSRF (utilise des tokens d'authentification)
 @app.route('/api/logs', methods=['POST'])
 @app.route('/api/logs/<server_id>', methods=['POST'])
@@ -2519,6 +2563,18 @@ def edit_server(server_id):
             
             # Récupérer l'ancienne configuration pour comparer
             old_config = server_config.get_server(server_id)
+            
+            # Gérer la configuration de la licence (Super Admin uniquement)
+            if user_permissions.get('is_super_admin', False):
+                license_active = request.form.get('license_active') == 'true'
+                license_reason = request.form.get('license_reason', '')
+                config_data['license'] = {
+                    'active': license_active,
+                    'reason': license_reason
+                }
+            elif old_config and 'license' in old_config:
+                # Préserver la licence existante si pas super admin
+                config_data['license'] = old_config['license']
             
             # Mettre à jour la configuration
             server_config.update_server_config(server_id, config_data)
