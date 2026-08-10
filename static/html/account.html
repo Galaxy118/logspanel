@@ -72,10 +72,21 @@
                     
                     <div class="row mb-3">
                         <div class="col-md-12 mb-2">
-                            <small class="muted d-block mb-1"><i class="fas fa-key me-1"></i> Jeton d'API :</small>
                             {% if client_server.config and client_server.config.api_token %}
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" value="{{ client_server.config.api_token }}" readonly style="background: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-color);">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted"><i class="fas fa-key me-1"></i> Jeton d'API Panel (Pour le script Logs.lua)</label>
+                                    <style>
+                                        .api-token-blur-input {
+                                            filter: blur(5px);
+                                            cursor: pointer;
+                                            transition: filter 0.3s ease;
+                                        }
+                                        .api-token-blur-input.revealed {
+                                            filter: blur(0);
+                                            cursor: text;
+                                        }
+                                    </style>
+                                    <input type="text" class="form-control api-token-blur-input" onclick="this.classList.toggle('revealed')" title="Cliquez pour révéler/cacher" value="{{ client_server.config.api_token }}" readonly style="background: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-color);">
                                 </div>
                             {% else %}
                                 <span class="badge bg-danger ms-1">Non généré</span>
