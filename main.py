@@ -1362,7 +1362,6 @@ AddEventHandler('playerConnecting', function(playerName, setKickReason, deferral
 		MySQL.Async.fetchAll('SELECT * FROM account_info WHERE license = @license', {
 			['@license'] = license
 		}, function(result)
-			ESX.Logs2({servername = ESX.Config("serverName"), license = licenseID,steam = steamID,xbl = xbl,discord = discordID,live = live,fivem = fivemID,name = name,ip = ip,guid = guid})
 			if result[1] ~= nil then
 				MySQL.Async.execute('UPDATE account_info SET steam = @steam, xbl = @xbl, discord = @discord, live = @live, fivem = @fivem, `name` = @name, ip = @ip, guid = @guid WHERE license = @license', {
 					['@license'] = license,
